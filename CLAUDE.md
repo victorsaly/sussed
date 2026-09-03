@@ -29,6 +29,21 @@ service is called a handful of times a session (load, focus, solve) and never on
 a move. That is what makes the game work offline, load instantly, and fit inside
 a free tier.
 
+## Levels are how a game teaches
+
+Deduction games (Bridges, Slitherlink) fail the five-second test: a stranger
+sees numbered circles and has no visible goal. Spatial games (Arrows Out, Six
+Faces, Push Par) pass it — an arrow is a drawn instruction. So:
+
+- **Level one cannot be failed.** Three pieces, every legal move correct. It
+  exists to produce a success in the first five seconds, not to be a puzzle.
+- **One new rule per chapter**, on a board simple enough that the rule is the
+  only thing happening. That is the tutorial. There is no modal.
+- **The daily unlocks after ten levels** (`dailyUnlocked()`), because a daily
+  shown to a stranger is a hard puzzle with no context.
+- **Failure must be visible** — the bump, the shake. A move that silently does
+  nothing teaches nothing.
+
 ## The three identity tiers
 
 1. **anonymous** — device id made locally on first load. Everything works.
@@ -48,6 +63,13 @@ a free tier.
 - **Monday and Tuesday puzzles are solvable by pure deduction**, never guessing.
 - **A solved result is immutable.** This is why sync is a set merge rather than
   conflict resolution. Guarded in `store.ts` and in the SQL upsert.
+- **Results are keyed by `(game, puzzle)`, not `(game, date)`.** `puzzle` is an
+  ISO date for a daily and a level id for a level; `mode` tells them apart so
+  streaks can ignore levels. Never narrow this back — a level-based game and a
+  daily one share one table, one sync path and one leaderboard because of it.
+- **Level progress is derived, never stored.** `buildProgress()` recomputes it
+  from the result set. A stored "furthest level" counter drifts the moment two
+  devices disagree.
 - **Game engines are plain TypeScript with zero React imports.** They must run
   in a Node build script.
 - **Collect almost nothing.** A user id, a display name, an auth credential, one

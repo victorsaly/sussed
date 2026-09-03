@@ -117,8 +117,12 @@ export class PlayersClient {
     });
   }
 
-  leaderboard(token: string | undefined, date: string): Promise<{ entries: LeaderboardEntry[]; total: number }> {
-    return this.call(`/boards/${this.game}/${date}`, { method: 'GET', token });
+  /** `puzzle` is an ISO date for a daily board, a level id for a level board. */
+  leaderboard(
+    token: string | undefined,
+    puzzle: string,
+  ): Promise<{ entries: LeaderboardEntry[]; total: number }> {
+    return this.call(`/boards/${this.game}/${encodeURIComponent(puzzle)}`, { method: 'GET', token });
   }
 
   /** GDPR, and also just decency. Both are one call. */

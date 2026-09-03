@@ -9,8 +9,13 @@
 import { addDays, fromIsoDate, toIsoDate, type PlayResult } from '@sussed/core';
 import type { GameStats, Streak } from './types';
 
-export function computeStreak(results: PlayResult[], today = toIsoDate()): Streak {
-  const solvedDates = new Set(results.filter((r) => r.solved).map((r) => r.date));
+/** Daily results only — a level solve is not a day played. */
+function dailies(results: readonly PlayResult[]): PlayResult[] {
+  return results.filter((r) => r.mode === 'daily');
+}
+
+export function computeStreak(results: readonly PlayResult[], today = toIsoDate()): Streak {
+  const solvedDates = new Set(dailies(results).filter((r) => r.solved).map((r) => r.puzzle));
   if (solvedDates.size === 0) {
     return { current: 0, best: 0, lastPlayed: null, atRisk: false };
   }
@@ -18,8 +23,8 @@ export function computeStreak(results: PlayResult[], today = toIsoDate()): Strea
   const sorted = [...solvedDates].sort();
   const last = sorted[sorted.length - 1] as string;
 
-  // Current streak counts back from today, or from yesterday if today is
-  // unplayed — a streak isn't broken until the day actually ends.
+  // Count back from today, or from yesterday if today is unplayed — a streak
+  // isn't broken until the day actually ends.
   let cursor = solvedDates.has(today) ? today : addDays(today, -1);
   let current = 0;
   while (solvedDates.has(cursor)) {
@@ -44,15 +49,20 @@ export function computeStreak(results: PlayResult[], today = toIsoDate()): Strea
   };
 }
 
-export function computeStats(results: PlayResult[], today = toIsoDate()): GameStats {
-  const solved = results.filter((r) => r.solved);
-  const times = solved.map((r) => r.ms).filter((ms) => ms > 0);
+export function computeStats(results: readonly PlayResult[], today = toIsoDate()): GameStats {
+  const daily = dailies(results);
+  const solvedDaily = daily.filter((r) => r.solved);
+  const levels = results.filter((r) => r.mode === 'level');
+  const times = results.filter((r) => r.solved).map((r) => r.ms).filter((ms) => ms > 0);
+
   const byWeekday = new Array<number>(7).fill(0);
-  for (const r of solved) byWeekday[fromIsoDate(r.date).getDay()]!++;
+  for (const r of solvedDaily) byWeekday[fromIsoDate(r.puzzle).getDay()]!++;
 
   return {
     played: results.length,
-    solved: solved.length,
+    solved: results.filter((r) => r.solved).length,
+    dailiesSolved: solvedDaily.length,
+    levelsSolved: levels.filter((r) => r.solved).length,
     streak: computeStreak(results, today),
     bestMs: times.length ? Math.min(...times) : null,
     averageMs: times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
@@ -77,6 +87,10 @@ export function claimPrompt(
   }
   if (stats.streak.current >= 3) {
     return `You're ${stats.streak.current} days in a row — that's only saved on this browser right now.`;
+  }
+  // The level equivalent of a streak: real progress worth not losing.
+  if (stats.levelsSolved >= 8) {
+    return `${stats.levelsSolved} levels in. Want that to follow you to your phone?`;
   }
   if (justSolved && stats.solved >= 3) {
     return `Three solved. Want your history to follow you to your phone?`;

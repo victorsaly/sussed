@@ -110,7 +110,10 @@ export function App() {
 
     void (async () => {
       await player.record({
-        date: puzzle.date,
+        // A daily's puzzle id IS its date. A level game passes a level id here
+        // and mode: 'level' — same record, same table, same sync.
+        puzzle: puzzle.date,
+        mode: 'daily',
         solved: true,
         ms,
         moves: stack.current.length,

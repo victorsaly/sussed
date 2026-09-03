@@ -25,6 +25,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Guards the level/daily split and the derived-progress rules. Cheap, and
+      # it catches the class of bug that silently loses someone's progress.
+      - name: Unit tests
+        run: pnpm test
+
       # Puzzles are regenerated here rather than trusted from the repo, so a
       # change to the generator can never quietly ship worse puzzles.
       - name: Generate a year of puzzles

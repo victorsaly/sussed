@@ -38,11 +38,15 @@ export interface Streak {
 export interface GameStats {
   played: number;
   solved: number;
+  /** solved daily puzzles — what the streak is built from */
+  dailiesSolved: number;
+  /** solved course levels — the progress bar before the daily unlocks */
+  levelsSolved: number;
   streak: Streak;
   /** ms, over solved puzzles only */
   bestMs: number | null;
   averageMs: number | null;
-  /** solves per weekday, Sunday first — the little bar chart in the stats panel */
+  /** daily solves per weekday, Sunday first — the bar chart in the stats panel */
   byWeekday: number[];
 }
 

@@ -2,16 +2,19 @@
   "name": "sussed",
   "private": true,
   "version": "0.1.0",
-  "description": "SUSSED — a studio of small, quiet daily puzzle games.",
+  "description": "SUSSED \u2014 a studio of small, quiet daily puzzle games.",
   "packageManager": "pnpm@9.12.3",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "pnpm --filter @sussed/bridges dev",
     "build": "pnpm -r --filter './games/*' build",
     "typecheck": "tsc -b --pretty",
     "generate": "pnpm --filter @sussed/bridges generate",
     "verify": "tsx tools/verify.ts",
-    "service:dev": "pnpm --filter @sussed/players dev"
+    "service:dev": "pnpm --filter @sussed/players dev",
+    "test": "tsx tools/levels.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

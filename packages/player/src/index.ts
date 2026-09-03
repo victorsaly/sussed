@@ -6,7 +6,18 @@
  * result" on finish. Everything else is this package's problem.
  */
 
-import { mergeResults, resultKey, toIsoDate, type PlayResult } from '@sussed/core';
+import {
+  buildProgress,
+  dailyUnlocked,
+  mergeResults,
+  nextLevel,
+  resultKey,
+  toIsoDate,
+  type LevelRef,
+  type LevelSet,
+  type PlayResult,
+  type Progress,
+} from '@sussed/core';
 import { PlayersClient, type ClientOptions } from './client';
 import { createStorage } from './store';
 import { claimPrompt, computeStats } from './stats';
@@ -72,9 +83,28 @@ export class Player {
     return computeStats(await this.storage.getResults(game));
   }
 
-  async resultFor(date: string, game = this.game): Promise<PlayResult | null> {
+  /** `puzzle` is an ISO date for a daily, a level id for a level. */
+  async resultFor(puzzle: string, game = this.game): Promise<PlayResult | null> {
     const all = await this.storage.getResults(game);
-    return all.find((r) => r.date === date) ?? null;
+    return all.find((r) => r.puzzle === puzzle) ?? null;
+  }
+
+  /**
+   * Where the player is in the course. Derived from results, never stored,
+   * so two devices can never disagree about it.
+   */
+  async progress(set: LevelSet): Promise<Progress> {
+    return buildProgress(set, await this.storage.getResults(set.game));
+  }
+
+  /** The level to open on arrival — no menu, no picker, just the board. */
+  async nextLevel(set: LevelSet): Promise<LevelRef | null> {
+    return nextLevel(set, await this.progress(set));
+  }
+
+  /** The daily stays hidden until someone actually knows how to play. */
+  async isDailyUnlocked(set: LevelSet): Promise<boolean> {
+    return dailyUnlocked(await this.progress(set));
   }
 
   /**
@@ -84,7 +114,8 @@ export class Player {
   async record(result: Omit<PlayResult, 'finishedAt' | 'game'> & { game?: string }): Promise<PlayResult> {
     const full: PlayResult = {
       game: result.game ?? this.game,
-      date: result.date,
+      puzzle: result.puzzle,
+      mode: result.mode,
       solved: result.solved,
       ms: result.ms,
       moves: result.moves,
@@ -186,11 +217,12 @@ export class Player {
     }
   }
 
-  async leaderboard(date = toIsoDate()): Promise<LeaderboardEntry[]> {
+  /** Boards exist for dailies and for levels alike — same call, same shape. */
+  async leaderboard(puzzle = toIsoDate()): Promise<LeaderboardEntry[]> {
     const token = await this.ensureToken();
     if (!token) return [];
     try {
-      const { entries } = await this.client.leaderboard(token, date);
+      const { entries } = await this.client.leaderboard(token, puzzle);
       return entries;
     } catch {
       return [];
@@ -214,7 +246,7 @@ export class Player {
 
       let changed = pending.length > 0;
       for (const incoming of remote) {
-        const mine = await this.resultFor(incoming.date, incoming.game);
+        const mine = await this.resultFor(incoming.puzzle, incoming.game);
         const winner = mine ? mergeResults(mine, incoming) : incoming;
         if (!mine || winner !== mine) {
           await this.storage.putResult(winner);

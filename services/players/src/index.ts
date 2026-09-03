@@ -280,7 +280,8 @@ app.post('/sync', requireAuth, async (c) => {
   const { results = [], since = 0 } = await c.req.json<{
     results?: {
       game: string;
-      date: string;
+      puzzle: string;
+      mode: 'daily' | 'level';
       solved: boolean;
       ms: number;
       moves: number;
@@ -298,9 +299,9 @@ app.post('/sync', requireAuth, async (c) => {
     await c.env.DB.batch(
       results.map((r) =>
         c.env.DB.prepare(
-          `INSERT INTO results (user_id, game, date, solved, ms, moves, hints, difficulty, finished_at, synced_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (user_id, game, date) DO UPDATE SET
+          `INSERT INTO results (user_id, game, puzzle, mode, solved, ms, moves, hints, difficulty, finished_at, synced_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, game, puzzle) DO UPDATE SET
              solved = MAX(results.solved, excluded.solved),
              ms = CASE WHEN excluded.solved = 1 AND (results.solved = 0 OR excluded.ms < results.ms)
                        THEN excluded.ms ELSE results.ms END,
@@ -311,7 +312,8 @@ app.post('/sync', requireAuth, async (c) => {
         ).bind(
           claims.sub,
           r.game,
-          r.date,
+          r.puzzle,
+          r.mode ?? 'daily',
           r.solved ? 1 : 0,
           r.ms,
           r.moves,
@@ -325,8 +327,8 @@ app.post('/sync', requireAuth, async (c) => {
   }
 
   const { results: rows } = await c.env.DB.prepare(
-    `SELECT game, date, solved, ms, moves, hints, difficulty, finished_at as finishedAt
-     FROM results WHERE user_id = ? AND synced_at > ? ORDER BY date DESC LIMIT 2000`,
+    `SELECT game, puzzle, mode, solved, ms, moves, hints, difficulty, finished_at as finishedAt
+     FROM results WHERE user_id = ? AND synced_at > ? ORDER BY finished_at DESC LIMIT 2000`,
   )
     .bind(claims.sub, since)
     .all<Record<string, number | string>>();
@@ -339,9 +341,10 @@ app.post('/sync', requireAuth, async (c) => {
 
 /* ------------------------------------------------------------- boards */
 
-app.get('/boards/:game/:date', async (c) => {
+/** `:puzzle` is an ISO date for a daily board, a level id for a level board. */
+app.get('/boards/:game/:puzzle', async (c) => {
   const game = c.req.param('game');
-  const date = c.req.param('date');
+  const puzzle = c.req.param('puzzle');
 
   const header = c.req.header('authorization') ?? '';
   const claims = header.startsWith('Bearer ')
@@ -353,16 +356,16 @@ app.get('/boards/:game/:date', async (c) => {
   const { results: rows } = await c.env.DB.prepare(
     `SELECT r.user_id as userId, COALESCE(u.display_name, 'anonymous') as displayName, r.ms, r.moves
      FROM results r JOIN users u ON u.id = r.user_id
-     WHERE r.game = ? AND r.date = ? AND r.solved = 1 AND r.hints = 0
+     WHERE r.game = ? AND r.puzzle = ? AND r.solved = 1 AND r.hints = 0
      ORDER BY r.ms ASC LIMIT 100`,
   )
-    .bind(game, date)
+    .bind(game, puzzle)
     .all<{ userId: string; displayName: string; ms: number; moves: number }>();
 
   const total = await c.env.DB.prepare(
-    'SELECT COUNT(*) as n FROM results WHERE game = ? AND date = ? AND solved = 1',
+    'SELECT COUNT(*) as n FROM results WHERE game = ? AND puzzle = ? AND solved = 1',
   )
-    .bind(game, date)
+    .bind(game, puzzle)
     .first<{ n: number }>();
 
   const entries = rows.map((r, i) => ({
@@ -389,7 +392,7 @@ app.get('/me/export', requireAuth, async (c) => {
     .bind(claims.sub)
     .first();
   const { results } = await c.env.DB.prepare(
-    'SELECT game, date, solved, ms, moves, hints, difficulty, finished_at as finishedAt FROM results WHERE user_id = ?',
+    'SELECT game, puzzle, mode, solved, ms, moves, hints, difficulty, finished_at as finishedAt FROM results WHERE user_id = ?',
   )
     .bind(claims.sub)
     .all();

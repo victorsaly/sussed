@@ -50,12 +50,17 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_expiry ON challenges(expires_at);
 
--- One row per player per game per day. The primary key IS the immutability
+-- One row per player per game per puzzle. The primary key IS the immutability
 -- guarantee: there is nowhere to put a second attempt at the same puzzle.
+--
+-- `puzzle` is an ISO date for a daily and a level id for a level, so one table
+-- serves a daily deduction game and a level-based spatial one without either
+-- knowing about the other. `mode` exists only so streaks can ignore levels.
 CREATE TABLE IF NOT EXISTS results (
   user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   game        TEXT NOT NULL,
-  date        TEXT NOT NULL,
+  puzzle      TEXT NOT NULL,
+  mode        TEXT NOT NULL DEFAULT 'daily',   -- daily | level
   solved      INTEGER NOT NULL,
   ms          INTEGER NOT NULL,
   moves       INTEGER NOT NULL,
@@ -63,10 +68,10 @@ CREATE TABLE IF NOT EXISTS results (
   difficulty  INTEGER NOT NULL,
   finished_at INTEGER NOT NULL,
   synced_at   INTEGER NOT NULL,
-  PRIMARY KEY (user_id, game, date)
+  PRIMARY KEY (user_id, game, puzzle)
 );
 
--- Serves two queries and no others: "today's top 100" and "pull my changes
--- since T". Everything else can be a table scan; these cannot.
-CREATE INDEX IF NOT EXISTS idx_results_board ON results(game, date, solved, hints, ms);
+-- Serves two queries and no others: "top 100 for this puzzle" and "pull my
+-- changes since T". Everything else can be a table scan; these cannot.
+CREATE INDEX IF NOT EXISTS idx_results_board ON results(game, puzzle, solved, hints, ms);
 CREATE INDEX IF NOT EXISTS idx_results_sync ON results(user_id, synced_at);
