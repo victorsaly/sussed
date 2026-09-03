@@ -1,0 +1,20 @@
+{
+  "name": "@sussed/players",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute sussed --local --file=./schema.sql",
+    "db:remote": "wrangler d1 execute sussed --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^11.0.0",
+    "hono": "^4.6.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0",
+    "wrangler": "^3.86.0"
+  }
+}

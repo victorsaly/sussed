@@ -1,0 +1,116 @@
+/* Bridges-specific. Everything shared lives in @sussed/ui/tokens.css. */
+
+.board {
+  user-select: none;
+}
+
+.bridge {
+  stroke: var(--s-ink-2);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.bridge-hint {
+  stroke: var(--s-accent);
+  stroke-dasharray: 4 5;
+  opacity: 0.9;
+}
+
+.island circle {
+  fill: var(--s-surface);
+  stroke: var(--s-ink);
+  stroke-width: 2;
+  transition: fill 0.12s ease, stroke 0.12s ease;
+}
+
+.island text {
+  font-family: var(--s-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  fill: var(--s-ink);
+  pointer-events: none;
+}
+
+/* An island whose number is met steps back rather than lighting up —
+   the reward is the board getting quieter as you go. */
+.island.is-done circle {
+  fill: var(--s-rule-soft);
+  stroke: var(--s-ink-3);
+}
+.island.is-done text {
+  fill: var(--s-ink-3);
+}
+
+.island.is-over circle {
+  stroke: var(--s-accent);
+  stroke-width: 3;
+}
+.island.is-over text {
+  fill: var(--s-accent);
+}
+
+.island.is-selected circle {
+  fill: var(--s-accent);
+  stroke: var(--s-accent);
+}
+.island.is-selected text {
+  fill: #fff;
+}
+
+.island.is-target circle {
+  stroke-dasharray: 3 3;
+  stroke: var(--s-accent);
+}
+
+.island {
+  cursor: pointer;
+}
+
+.hint-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--s-ink-2);
+  text-align: center;
+  min-height: 1.4em;
+}
+
+/* The one animated moment: the network closing. Everything else stays still. */
+@keyframes solved-sweep {
+  from {
+    stroke-dashoffset: 1400;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.solved-flash {
+  stroke: var(--s-accent);
+  stroke-width: 3;
+  stroke-dasharray: 1400;
+  animation: solved-sweep 0.9s ease-out both;
+}
+
+.hint .bridge {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--s-ink);
+  color: var(--s-bg);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  z-index: 40;
+}

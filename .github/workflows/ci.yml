@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Puzzles are regenerated here rather than trusted from the repo, so a
+      # change to the generator can never quietly ship worse puzzles.
+      - name: Generate a year of puzzles
+        run: pnpm generate
+
+      # The gate. Every shipped puzzle is re-solved from scratch; the build
+      # fails if any has zero or more than one solution, or if an "easy" one
+      # turns out to need guessing.
+      - name: Verify every puzzle
+        run: pnpm verify
+
+      - name: Build games
+        run: pnpm build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridges
+          path: games/bridges/dist
+          retention-days: 7

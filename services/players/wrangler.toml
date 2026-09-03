@@ -1,0 +1,26 @@
+name = "sussed-players"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Free tier covers 100,000 requests/day. Because games write locally first and
+# only call /sync a few times per session, that is roughly 10-20k daily players
+# across the whole studio before this costs anything.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sussed"
+# Replace after: wrangler d1 create sussed
+database_id = "REPLACE_ME"
+
+[vars]
+RP_ID = "sussed.games"
+RP_ORIGIN = "https://sussed.games"
+ALLOWED_ORIGINS = "https://sussed.games,https://bridgesdaily.com,http://localhost:5173"
+
+# Secrets — never in this file:
+#   wrangler secret put TOKEN_SECRET     (openssl rand -base64 48)
+#   wrangler secret put RESEND_API_KEY   (optional; without it magic links log to console)
+
+[observability]
+enabled = true
