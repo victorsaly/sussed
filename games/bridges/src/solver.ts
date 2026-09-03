@@ -24,6 +24,7 @@ import {
   buildTopology,
   isConnected,
   type Counts,
+  type Marks,
   type Puzzle,
   type Topology,
 } from './engine';
@@ -154,34 +155,100 @@ export function rate(report: SolveReport): 1 | 2 | 3 {
   return 3;
 }
 
+export interface Deduction {
+  edgeId: number;
+  value: number;
+  /** the island that forces it — what a hint should point at */
+  island: number;
+  reason: string;
+}
+
 /**
- * A hint that teaches instead of telling: find one edge that propagation can
- * prove, and hand back the reason. Never reveals the whole answer.
+ * A hint that teaches instead of telling.
+ *
+ * Two details make the difference. It reads the player's own ✗ marks, so it
+ * reasons from where they actually are rather than starting fresh. And it
+ * returns WHICH island forces the move, so the first rung of the hint ladder
+ * can point at a place to look without giving the answer away.
  */
 export function nextDeduction(
   p: Puzzle,
   topo: Topology,
   counts: Counts,
-): { edgeId: number; value: number; reason: string } | null {
+  marks: Marks = new Set<number>(),
+): Deduction | null {
   const n = topo.edges.length;
   const b: Bounds = { lo: new Int8Array(n), hi: new Int8Array(n).fill(2) };
   for (let i = 0; i < n; i++) {
     const c = counts[i] ?? 0;
     if (c > 0) b.lo[i] = c;
+    if (marks.has(i)) b.hi[i] = 0;
   }
   if (!propagate(p, topo, b)) return null;
 
   for (let i = 0; i < n; i++) {
-    if (b.lo[i] === b.hi[i] && b.lo[i] !== (counts[i] ?? 0)) {
-      const value = b.lo[i]!;
-      const e = topo.edges[i]!;
-      const island = p.islands[e.a]!;
-      const reason =
-        value === 0
-          ? `The ${island.n} island can already be satisfied without this bridge.`
-          : `The ${island.n} island cannot reach ${island.n} unless ${value === 2 ? 'both bridges go' : 'a bridge goes'} here.`;
-      return { edgeId: i, value, reason };
+    if (b.lo[i] !== b.hi[i]) continue;
+    const value = b.lo[i]!;
+    const already = counts[i] ?? 0;
+    // Nothing to say about a bridge the player has already placed correctly,
+    // or one they have already ruled out themselves.
+    if (value > 0 && value === already) continue;
+    if (value === 0 && marks.has(i)) continue;
+    const e = topo.edges[i]!;
+    // Which endpoint actually forces it? That is the one worth staring at.
+    let who = e.a;
+    for (const cand of [e.a, e.b]) {
+      const need = p.islands[cand]!.n;
+      let mn = 0;
+      let mx = 0;
+      for (const id of topo.incident[cand]!) {
+        mn += b.lo[id]!;
+        mx += b.hi[id]!;
+      }
+      if (need === mx || need === mn) {
+        who = cand;
+        break;
+      }
     }
+    const n0 = p.islands[who]!.n;
+    return {
+      edgeId: i,
+      value,
+      island: who,
+      reason:
+        value === 0
+          ? `The ${n0} is already spoken for — this one can be ruled out.`
+          : `The ${n0} cannot reach ${n0} unless ${value === 2 ? 'both bridges go' : 'a bridge goes'} here.`,
+    };
   }
   return null;
+}
+
+/**
+ * The next few forced moves, in the order a person would find them.
+ *
+ * Each deduction is applied to a scratch board before the next is looked for,
+ * so this is a genuine causal chain rather than a list of unrelated answers.
+ * That ordering is the whole value — it shows the reasoning moving across the
+ * board, which is the thing a single isolated hint can never convey.
+ */
+export function deductionChain(
+  p: Puzzle,
+  topo: Topology,
+  counts: Counts,
+  marks: Marks,
+  max = 4,
+): Deduction[] {
+  const workCounts = counts.slice();
+  const workMarks = new Set(marks);
+  const out: Deduction[] = [];
+
+  for (let k = 0; k < max; k++) {
+    const step = nextDeduction(p, topo, workCounts, workMarks);
+    if (!step) break;
+    out.push(step);
+    if (step.value === 0) workMarks.add(step.edgeId);
+    else workCounts[step.edgeId] = step.value;
+  }
+  return out;
 }

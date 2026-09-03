@@ -44,6 +44,24 @@ Faces, Push Par) pass it — an arrow is a drawn instruction. So:
 - **Failure must be visible** — the bump, the shake. A move that silently does
   nothing teaches nothing.
 
+## Hints: a nudge before an answer
+
+`packages/player/hints.ts` owns the ladder, and it is game-agnostic — a game
+supplies a `HintSource`, nothing in that file knows what a bridge is.
+
+1. **where to look** — pulses the piece that already determines something
+2. **why** — one sentence, concrete, in the player's words
+3. **what follows** — the next few forced moves as numbered arrows, in the
+   order you'd find them, left for the player to actually play
+4. **do it** — places the first one, then the ladder resets
+
+Rung 3 is the one that matters; it shows reasoning travelling across the board
+instead of handing over an isolated fact. Budget: free for the first five
+course levels (a hint there IS the teaching), then 6, and 6/5/4 by daily
+difficulty. Never remove the ✗ notation — without a way to record "definitely
+not here", every ruled-out move has to live in the player's head, which is
+where people give up on a board they could otherwise solve.
+
 ## The three identity tiers
 
 1. **anonymous** — device id made locally on first load. Everything works.

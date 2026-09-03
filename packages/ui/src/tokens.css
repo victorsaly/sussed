@@ -218,3 +218,158 @@ button {
   color: var(--s-ink-3);
   font-weight: 400;
 }
+
+/* --- board structure ----------------------------------------------------
+   Faint by design. These layers exist to stop the eye hunting; the moment
+   they compete with the pieces they have stopped helping. */
+
+.s-lattice {
+  fill: var(--s-ink-3);
+  opacity: 0.22;
+}
+
+.s-lane {
+  stroke: var(--s-ink-3);
+  stroke-width: 1;
+  opacity: 0.17;
+  stroke-linecap: round;
+}
+
+/* A lane still in play reads slightly stronger, so the board simplifies
+   visually as it gets solved. */
+.s-lane-live {
+  stroke: var(--s-ink-2);
+  opacity: 0.3;
+}
+
+/* --- the hint chain -----------------------------------------------------
+   Arrows draw themselves in sequence, hold, then fade and repeat, so the
+   order is readable without anyone having to press anything again. */
+
+.s-chain {
+  animation: s-chain-fade 3.2s ease-in-out infinite;
+}
+
+.s-chain-line {
+  stroke: var(--s-accent);
+  stroke-width: 2.6;
+  fill: none;
+  stroke-linecap: round;
+  animation: s-chain-draw 3.2s ease-in-out infinite;
+}
+
+.s-chain-head,
+.s-chain-badge {
+  fill: var(--s-accent);
+}
+
+.s-chain-x {
+  stroke: var(--s-accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.s-chain-num {
+  fill: #fff;
+  font-family: var(--s-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.s-chain-label {
+  fill: var(--s-accent);
+  font-family: var(--s-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+@keyframes s-chain-draw {
+  0% { stroke-dashoffset: var(--len); }
+  22%, 72% { stroke-dashoffset: 0; }
+  92%, 100% { stroke-dashoffset: var(--len); }
+}
+
+@keyframes s-chain-fade {
+  0% { opacity: 0; }
+  18%, 72% { opacity: 1; }
+  92%, 100% { opacity: 0; }
+}
+
+/* --- ruled out ----------------------------------------------------------
+   The single most important mark on the board. Without a way to record a
+   negative, every "definitely not here" has to live in the player's head,
+   which is exactly where people run out of steam. */
+
+.s-mark {
+  stroke: var(--s-ink-3);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+/* Drawn by the game, not the player, when a move becomes impossible. This is
+   how the mark gets taught: you watch one appear before you ever draw one. */
+.s-mark-auto {
+  stroke: var(--s-rule);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+/* --- where to look ------------------------------------------------------ */
+
+.s-look {
+  fill: none;
+  stroke: var(--s-accent);
+  stroke-width: 2.5;
+  animation: s-ping 1.3s ease-out infinite;
+}
+
+@keyframes s-ping {
+  0% { r: 17; opacity: 0.9; }
+  70% { r: 30; opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* --- hint button -------------------------------------------------------- */
+
+.s-pill {
+  font-family: var(--s-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--s-rule-soft);
+  color: var(--s-ink-3);
+}
+
+.s-pill-free {
+  background: var(--s-good-soft);
+  color: var(--s-good);
+}
+
+.s-btn-offered {
+  border-color: var(--s-accent);
+  color: var(--s-accent);
+  font-weight: 600;
+  animation: s-breathe 2s ease-in-out infinite;
+}
+
+@keyframes s-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 var(--s-accent-soft); }
+  50% { box-shadow: 0 0 0 6px var(--s-accent-soft); }
+}
+
+.s-btn { gap: 7px; }
+
+/* An illegal move must fail visibly. A tap that silently does nothing
+   teaches nothing; one that refuses teaches the rule instantly. */
+.s-shake {
+  animation: s-shake 0.18s ease-in-out 2;
+}
+
+@keyframes s-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}

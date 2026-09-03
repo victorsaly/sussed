@@ -11,8 +11,10 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { allLevels } from '../packages/core/src/levels';
 import { buildTopology, isSolved, type Puzzle } from '../games/bridges/src/engine';
 import { solve } from '../games/bridges/src/solver';
+import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from '../games/bridges/src/levels';
 
 interface Bundle {
   epoch: string;
@@ -86,6 +88,36 @@ for (const game of GAMES) {
     `${failures === 0 ? '✓' : '✗'} ${game.slug}: ${bundle.puzzles.length} puzzles re-solved in ${(ms / 1000).toFixed(1)}s ` +
       `· ${bundle.puzzles.length - guessy} pure-deduction, ${guessy} need a look-ahead`,
   );
+}
+
+/* ---- the teaching course ------------------------------------------------
+   A course level with two answers, or one that needs a guess, teaches the
+   wrong lesson at exactly the moment a player is deciding whether to stay. */
+{
+  const levels = allLevels(BRIDGES_LEVELS);
+  for (const ref of levels) {
+    const puzzle = levelPuzzle(ref.id);
+    if (!puzzle) {
+      console.error(`✗ course ${ref.id}: no puzzle defined`);
+      failures++;
+      continue;
+    }
+    if (!teachingFor(ref.id)) {
+      console.error(`✗ course ${ref.id}: no rule declared — every chapter must teach exactly one`);
+      failures++;
+    }
+    const topo = buildTopology(puzzle);
+    const report = solve(puzzle, 2, topo);
+    if (report.count !== 1) {
+      console.error(`✗ course ${ref.id}: ${report.count === 0 ? 'no solution' : 'more than one solution'}`);
+      failures++;
+    }
+    if (puzzle.islands.length > 6) {
+      console.error(`✗ course ${ref.id}: ${puzzle.islands.length} islands — a teaching board should show one rule, not a puzzle`);
+      failures++;
+    }
+  }
+  console.log(`${failures === 0 ? '✓' : '✗'} course: ${levels.length} teaching levels, each with exactly one answer`);
 }
 
 if (failures > 0) {

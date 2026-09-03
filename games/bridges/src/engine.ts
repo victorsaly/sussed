@@ -44,8 +44,23 @@ export interface Topology {
   crossings: [number, number][];
 }
 
-/** Bridge counts indexed by edge id. This is the whole mutable game state. */
+/** Bridge counts indexed by edge id. */
 export type Counts = number[];
+
+/**
+ * Edges the player has ruled out.
+ *
+ * This is the most important thing on the board after the bridges themselves.
+ * Without a way to record "definitely not here", every ruled-out bridge has to
+ * live in the player's head — which is precisely where people run out of steam
+ * on a board they are otherwise perfectly capable of solving.
+ */
+export type Marks = ReadonlySet<number>;
+
+export interface BoardState {
+  counts: Counts;
+  marks: Marks;
+}
 
 /**
  * Candidate bridges: for each island, the next island directly right and
@@ -126,8 +141,45 @@ export function blockedByCrossing(topo: Topology, counts: Counts, edgeId: number
 }
 
 /**
- * The single player-facing action: cycle a bridge 0 -> 1 -> 2 -> 0.
+ * The single player-facing action: none -> one -> two -> ruled out -> none.
  * Returns null when the move is illegal, so the UI can shake rather than guess.
+ */
+export function cycleEdge(
+  p: Puzzle,
+  topo: Topology,
+  state: BoardState,
+  edgeId: number,
+): BoardState | null {
+  const current = state.counts[edgeId] ?? 0;
+  const marked = state.marks.has(edgeId);
+
+  if (marked) {
+    const marks = new Set(state.marks);
+    marks.delete(edgeId);
+    return { counts: state.counts, marks };
+  }
+
+  if (current === 2) {
+    const counts = state.counts.slice();
+    counts[edgeId] = 0;
+    const marks = new Set(state.marks);
+    marks.add(edgeId);
+    return { counts, marks };
+  }
+
+  if (blockedByCrossing(topo, state.counts, edgeId)) return null;
+
+  const counts = state.counts.slice();
+  counts[edgeId] = current + 1;
+  const e = topo.edges[edgeId]!;
+  const deg = degrees(p, topo, counts);
+  if (deg[e.a]! > p.islands[e.a]!.n || deg[e.b]! > p.islands[e.b]!.n) return null;
+  return { counts, marks: state.marks };
+}
+
+/**
+ * The older three-state cycle, kept for the generator and tests which never
+ * rule anything out.
  */
 export function cycleBridge(
   p: Puzzle,

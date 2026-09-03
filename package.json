@@ -14,7 +14,7 @@
     "generate": "pnpm --filter @sussed/bridges generate",
     "verify": "tsx tools/verify.ts",
     "service:dev": "pnpm --filter @sussed/players dev",
-    "test": "tsx tools/levels.test.ts"
+    "test": "tsx tools/levels.test.ts && tsx tools/hints.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
