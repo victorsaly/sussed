@@ -1,5 +1,8 @@
 # SUSSED — working notes for Claude
 
+**New session? Read `docs/handoff.md` first** — state of play, what is verified,
+what has never been run, and what to do next. Then this file for the rules.
+
 Read this before changing anything. It is the short version of decisions that
 were argued out already; if a change contradicts one of these, say so rather
 than quietly working around it.

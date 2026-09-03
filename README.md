@@ -80,5 +80,6 @@ Copy `games/bridges`. Replace four files — `engine.ts`, `solver.ts`,
 `generate.ts`, and the board component. Identity, streaks, sync, sheets, the
 share card, the PWA shell and the theme all come from the packages unchanged.
 
-See `CLAUDE.md` for the decisions behind all of this, and `docs/` for the
-studio brief and the game slate.
+`docs/handoff.md` is the state of play — what works, what has never been run,
+and what to do next. `CLAUDE.md` holds the invariants. `docs/project-brief.md`
+holds the studio brief and the full game slate.
