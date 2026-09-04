@@ -11,3 +11,7 @@ _to_delete/
 
 # Built by tools/build-site.ts for GitHub Pages.
 _site/
+
+# Local-only working notes: the studio brief, the slate, domain and money
+# decisions. Deliberately not published — see the note in CLAUDE.md.
+docs/

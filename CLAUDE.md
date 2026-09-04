@@ -3,6 +3,12 @@
 **New session? Read `docs/handoff.md` first** — state of play, what is verified,
 what has never been run, and what to do next. Then this file for the rules.
 
+`docs/` is deliberately not in the repository. It holds the studio brief, the
+full game slate, and the domain and money decisions, and this repo is public.
+It lives only on Victor's machine, so a fresh clone will not have it — work
+from this file, and say so rather than inventing what the handoff would have
+said.
+
 Read this before changing anything. It is the short version of decisions that
 were argued out already; if a change contradicts one of these, say so rather
 than quietly working around it.
