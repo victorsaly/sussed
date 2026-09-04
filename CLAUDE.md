@@ -178,16 +178,25 @@ is never recorded as solved.
 
 ```
 packages/core     seeded rng · daily calendar · move stack · shared types
-packages/player   identity · local store · sync · stats     ← the platform
+packages/player   identity · local store · sync · stats · the hint ladder and
+                  the flip                                  ← the platform
 packages/share    the share card (text first, image second)
-packages/ui       theme tokens + shared chrome
+packages/ui       theme tokens · shared chrome · GameLogo · CourseDots
 packages/pwa      service worker, install prompt, manifest
 games/bridges     engine.ts (rules) · solver.ts · generate.ts · levels.ts · React board
 games/twostars    same files — Star Battle, two stars per row/column/region
 games/loop        same files — Slitherlink, one closed loop from edge counts
+games/arrows      same files, plus construct.ts (reverse construction) and
+                  hints.ts — Arrows Out, paths that thread off the board
+sites/hub         the studio front door, a static page with a slot for the
+                  game cards; the marks come from GameLogo, never copied
 services/players  one Cloudflare Worker for all nine games
 tools/verify.ts   the CI gate
+tools/build-site.ts  every game plus the hub into _site/, for staging
+tools/icons.py    one app-icon mark per game
 ```
+
+The repository is public and `docs/` is not in it — see the note at the top.
 
 ## Commands
 
@@ -198,7 +207,9 @@ pnpm verify            # re-solves every puzzle; CI gate
 pnpm dev               # play Bridges at localhost:5173
 pnpm dev:twostars      # Two Stars at localhost:5174
 pnpm dev:loop          # Loop at localhost:5175
+pnpm dev:arrows        # Arrows Out at localhost:5176
 pnpm typecheck
+pnpm site              # hub + all four games into _site/ (SITE_BASE to re-root)
 pnpm service:dev       # wrangler dev for the players service
 ```
 
