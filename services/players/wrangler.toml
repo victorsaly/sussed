@@ -11,7 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "sussed"
 # Replace after: wrangler d1 create sussed
-database_id = "REPLACE_ME"
+database_id = "b6af72e9-2c53-460c-88e7-509b080a33d7"
 
 [vars]
 RP_ID = "sussed.games"
