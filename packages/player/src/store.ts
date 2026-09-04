@@ -20,9 +20,34 @@ interface StoredResult extends PlayResult {
   syncedAt: number | null;
 }
 
+/**
+ * How long to wait for IndexedDB before giving up and playing from memory.
+ *
+ * `indexedDB.open()` can settle neither way: a private window, a browser with
+ * site data blocked, or another tab holding an old version open all leave the
+ * request hanging with no success and no error. Nothing downstream has a
+ * timeout either, so the promise never resolves, `Player.create` never returns,
+ * and the provider renders nothing — a permanently blank page where the board
+ * should be. That is the one rule in this project broken by a missing event
+ * handler, so it gets a deadline.
+ */
+const OPEN_TIMEOUT_MS = 2000;
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error('indexedDB did not open in time'))),
+      OPEN_TIMEOUT_MS,
+    );
+
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(RESULTS)) {
@@ -32,8 +57,11 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => finish(() => resolve(req.result));
+    req.onerror = () => finish(() => reject(req.error));
+    // Another tab is holding the previous version open. It will not resolve
+    // on its own, so fall back rather than wait for the player to close it.
+    req.onblocked = () => finish(() => reject(new Error('indexedDB blocked')));
   });
 }
 

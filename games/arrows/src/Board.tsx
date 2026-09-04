@@ -4,21 +4,27 @@
  * One SVG, one stroke per path. The threading is done with `stroke-dasharray`
  * rather than by redrawing cells: a window the length of the body slides along
  * the full route, so the body genuinely follows the head around its own
- * corners. That is the animation the whole game rests on — it explains the rule
- * while the player watches, which is why this game needs no tutorial.
+ * corners. That animation explains the rule while the player watches, which is
+ * why this game needs no tutorial.
  *
- * Two details carried over from the prototype, both of which were bugs first:
+ * Everything here is computed during render, including the resting dash window
+ * and every arrowhead. The first version set those imperatively in a layout
+ * effect, and the failure mode was ugly enough to be worth recording: if the
+ * effect did not fire, every path drew its FULL route — including the run that
+ * carries on past the edge of the board — and every arrowhead sat collapsed at
+ * the origin, invisible. A board that is only correct one effect after paint is
+ * the wrong shape for a game whose whole promise is that you arrive already
+ * playing. So the geometry is pure, the route length is arithmetic rather than
+ * `getTotalLength()`, and the very first paint is right.
  *
- *   The arrowhead takes its angle from `dir` at rest and from the drawn tangent
- *   only while moving. Using the tangent at rest makes a head point along its
- *   last body segment, which is the direction it CAME from on a curled path —
- *   an arrow that points left and then leaves upward.
- *
- *   The tap target is a second, fat, transparent copy of the same route. A
- *   13px stroke is not something a thumb can hit; a 70px one is.
+ * One detail carried over from the prototype, which was a bug first: an
+ * arrowhead takes its angle from `dir` at rest and from its travelling segment
+ * only while moving. Using the drawn tangent at rest points the head back along
+ * the last body segment — the direction it came FROM on a curled path — which
+ * is an arrow that points left and then leaves upward.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DX,
   DY,
@@ -41,39 +47,72 @@ const PAD = 60;
  * body's width. On a three-path teaching board that reads fine; at eight paths
  * and 82% density it does not — you have to hunt for the arrowheads, and the
  * arrowhead is the ONLY thing that decides whether a path can go. A player
- * scanning for heads and finding tails is a player being asked to do the wrong
- * work.
- *
- * So the tail is thinner and paler than the head, in proportion to how much it
- * matters: none at all.
+ * scanning for heads and finding tails is being asked to do the wrong work.
  */
 const BODY_WIDTH = 11;
 const HEAD_SIZE = 40;
 /** How far the tip sits ahead of the head cell, as a share of HEAD_SIZE. */
 const HEAD_TIP = 0.75;
 
+type Point = { x: number; y: number };
+
 /** Exit takes a moment longer for a longer path, so all bodies move at one speed. */
 const exitMs = (path: PathDef): number => 360 + path.cells.length * 45;
 
-function routeD(p: Puzzle, path: PathDef): string {
-  const pts = path.cells.map((c) => [PAD + cellX(p, c) * CELL, PAD + cellY(p, c) * CELL]);
+/** How far the route runs on past the edge — far enough for any board. */
+const runOff = (p: Puzzle): number => (Math.max(p.w, p.h) + 2) * CELL;
+
+/**
+ * The route: the body's cells, then straight on past the edge so the head has
+ * somewhere to go. Every segment is axis-aligned and exactly CELL long, which
+ * is what lets the lengths below be arithmetic instead of measurement.
+ */
+function routePoints(p: Puzzle, path: PathDef): Point[] {
+  const pts: Point[] = path.cells.map((c) => ({
+    x: PAD + cellX(p, c) * CELL,
+    y: PAD + cellY(p, c) * CELL,
+  }));
   let x = cellX(p, headCell(path));
   let y = cellY(p, headCell(path));
-  // Carry the route past the edge, so the head has somewhere to go.
-  for (let k = 0; k < Math.max(p.w, p.h) + 2; k++) {
+  const steps = runOff(p) / CELL;
+  for (let k = 0; k < steps; k++) {
     x += DX[path.dir] as number;
     y += DY[path.dir] as number;
-    pts.push([PAD + x * CELL, PAD + y * CELL]);
+    pts.push({ x: PAD + x * CELL, y: PAD + y * CELL });
   }
-  return `M${pts.map((q) => `${q[0]} ${q[1]}`).join('L')}`;
+  return pts;
 }
 
-function headPoints(cx: number, cy: number, angle: number): string {
+const toD = (pts: Point[]): string => `M${pts.map((q) => `${q.x} ${q.y}`).join('L')}`;
+
+/** Where the leading end sits at `dist` along the route, and which way it points. */
+function alongRoute(pts: Point[], dist: number): { at: Point; angle: number } {
+  let left = Math.max(0, dist);
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1] as Point;
+    const b = pts[i] as Point;
+    const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    if (len === 0) continue;
+    if (left <= len) {
+      const t = left / len;
+      return {
+        at: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t },
+        angle: Math.atan2(b.y - a.y, b.x - a.x),
+      };
+    }
+    left -= len;
+  }
+  const last = pts[pts.length - 1] as Point;
+  const prev = pts[pts.length - 2] ?? last;
+  return { at: last, angle: Math.atan2(last.y - prev.y, last.x - prev.x) };
+}
+
+function headPoints(at: Point, angle: number): string {
   const s = HEAD_SIZE;
   return (
-    `${cx + Math.cos(angle) * s * HEAD_TIP},${cy + Math.sin(angle) * s * HEAD_TIP} ` +
-    `${cx + Math.cos(angle + 2.5) * s},${cy + Math.sin(angle + 2.5) * s} ` +
-    `${cx + Math.cos(angle - 2.5) * s},${cy + Math.sin(angle - 2.5) * s}`
+    `${at.x + Math.cos(angle) * s * HEAD_TIP},${at.y + Math.sin(angle) * s * HEAD_TIP} ` +
+    `${at.x + Math.cos(angle + 2.5) * s},${at.y + Math.sin(angle + 2.5) * s} ` +
+    `${at.x + Math.cos(angle - 2.5) * s},${at.y + Math.sin(angle - 2.5) * s}`
   );
 }
 
@@ -102,87 +141,57 @@ export function Board({
   chain,
   miss,
 }: BoardProps) {
-  const bodies = useRef(new Map<number, SVGPathElement>());
-  const heads = useRef(new Map<number, SVGPolygonElement>());
+  // How far the leaving path has threaded, in route units. Kept in state so the
+  // drawing stays a function of the data even mid-animation.
+  const [travelled, setTravelled] = useState(0);
   const frame = useRef(0);
+  const done = useRef(onExitDone);
+  done.current = onExitDone;
 
-  const width = PAD * 2 + (puzzle.w - 1) * CELL;
-  const height = PAD * 2 + (puzzle.h - 1) * CELL;
-
-  /**
-   * Put a path's visible window at `offset` along its route, and its head at
-   * the leading end. At offset 0 this is the resting position, which is why the
-   * same function draws both the static board and every frame of the animation.
-   */
-  const place = useCallback(
-    (index: number, offset: number) => {
-      const path = puzzle.paths[index];
-      const body = bodies.current.get(index);
-      const head = heads.current.get(index);
-      if (!path || !body || !head) return;
-
-      const total = body.getTotalLength();
-      const bodyLen = (path.cells.length - 1) * CELL;
-      body.setAttribute('stroke-dasharray', `${bodyLen} ${total + bodyLen}`);
-      body.setAttribute('stroke-dashoffset', String(-offset));
-
-      const at = Math.min(offset + bodyLen, total);
-      const tip = body.getPointAtLength(at);
-      const behind = body.getPointAtLength(Math.max(0, at - 1));
-      const angle =
-        offset === 0
-          ? Math.atan2(DY[path.dir] as number, DX[path.dir] as number)
-          : Math.atan2(tip.y - behind.y, tip.x - behind.x);
-      head.setAttribute('points', headPoints(tip.x, tip.y, angle));
-    },
-    [puzzle],
-  );
-
-  // Draw every path at rest whenever the board changes. getTotalLength needs the
-  // element laid out, so this is a layout effect rather than a render.
-  useLayoutEffect(() => {
-    puzzle.paths.forEach((_, i) => place(i, 0));
-  }, [puzzle, place]);
-
-  // Thread one path out, then tell the caller so it can move on.
   useEffect(() => {
-    if (exiting === null) return;
+    if (exiting === null) {
+      setTravelled(0);
+      return;
+    }
     const path = puzzle.paths[exiting];
-    const body = bodies.current.get(exiting);
-    if (!path || !body) {
-      onExitDone();
+    if (!path) {
+      done.current();
       return;
     }
 
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const total = (path.cells.length - 1) * CELL + runOff(puzzle);
+    const reduced =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
     if (reduced) {
-      onExitDone();
+      done.current();
       return;
     }
 
-    const total = body.getTotalLength();
     const duration = exitMs(path);
     const started = performance.now();
-
     const step = (now: number): void => {
       const t = Math.min(1, (now - started) / duration);
       // Smoothstep, so it threads rather than jerks.
-      place(exiting, total * (t < 1 ? t * t * (3 - 2 * t) : 1));
+      setTravelled(total * t * t * (3 - 2 * t));
       if (t < 1) frame.current = requestAnimationFrame(step);
-      else onExitDone();
+      else done.current();
     };
     frame.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame.current);
-  }, [exiting, puzzle, place, onExitDone]);
+  }, [exiting, puzzle]);
 
+  const width = PAD * 2 + (puzzle.w - 1) * CELL;
+  const height = PAD * 2 + (puzzle.h - 1) * CELL;
   const order = new Map(chain.map((index, i) => [index, i + 1]));
+  const live = state.live.filter(Boolean).length;
 
   return (
     <svg
       className="maze"
       viewBox={`0 0 ${width} ${height}`}
       role="group"
-      aria-label={`${puzzle.w} by ${puzzle.h} board, ${state.live.filter(Boolean).length} paths left`}
+      aria-label={`${puzzle.w} by ${puzzle.h} board, ${live} path${live === 1 ? '' : 's'} left`}
     >
       {Array.from({ length: puzzle.h }, (_, y) =>
         Array.from({ length: puzzle.w }, (_, x) => (
@@ -198,7 +207,24 @@ export function Board({
 
       {puzzle.paths.map((path, i) => {
         if (!state.live[i] && exiting !== i) return null;
-        const d = routeD(puzzle, path);
+
+        const pts = routePoints(puzzle, path);
+        const d = toD(pts);
+        const bodyLen = (path.cells.length - 1) * CELL;
+        const total = bodyLen + runOff(puzzle);
+        const offset = exiting === i ? travelled : 0;
+
+        // The visible window is the body's length, slid along the whole route.
+        const dash = `${bodyLen} ${total + bodyLen}`;
+
+        const tip =
+          offset === 0
+            ? {
+                at: { x: PAD + cellX(puzzle, headCell(path)) * CELL, y: PAD + cellY(puzzle, headCell(path)) * CELL },
+                angle: Math.atan2(DY[path.dir] as number, DX[path.dir] as number),
+              }
+            : alongRoute(pts, offset + bodyLen);
+
         const badge = order.get(i);
         const classes = [
           'path',
@@ -212,22 +238,13 @@ export function Board({
         return (
           <g key={i} className={classes}>
             <path
-              ref={(el) => {
-                if (el) bodies.current.set(i, el);
-                else bodies.current.delete(i);
-              }}
               className="path-body"
               d={d}
               strokeWidth={BODY_WIDTH}
+              strokeDasharray={dash}
+              strokeDashoffset={-offset}
             />
-            <polygon
-              ref={(el) => {
-                if (el) heads.current.set(i, el);
-                else heads.current.delete(i);
-              }}
-              className="path-head"
-              points="0,0 0,0 0,0"
-            />
+            <polygon className="path-head" points={headPoints(tip.at, tip.angle)} />
             {badge !== undefined && (
               <text
                 className="path-badge"
@@ -237,6 +254,8 @@ export function Board({
                 {badge}
               </text>
             )}
+            {/* A fat invisible copy of the route. The visible stroke is 11 units
+                wide; a thumb needs about 70. */}
             <path
               className="path-hit"
               d={d}
