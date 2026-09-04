@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { Player } from '@sussed/player';
 import { Sheet } from './Sheet';
 
@@ -123,7 +123,7 @@ export function ClaimPrompt({
   );
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   display: 'block',
   width: '100%',
   minHeight: 'var(--s-tap)',
