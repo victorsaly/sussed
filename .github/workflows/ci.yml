@@ -46,6 +46,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: bridges
-          path: games/bridges/dist
+          name: games
+          path: games/*/dist
           retention-days: 7

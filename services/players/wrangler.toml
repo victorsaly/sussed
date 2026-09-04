@@ -16,7 +16,7 @@ database_id = "b6af72e9-2c53-460c-88e7-509b080a33d7"
 [vars]
 RP_ID = "sussed.games"
 RP_ORIGIN = "https://sussed.games"
-ALLOWED_ORIGINS = "https://sussed.games,https://bridgesdaily.com,http://localhost:5173"
+ALLOWED_ORIGINS = "https://sussed.games,https://bridgesdaily.com,https://twostars.com,https://loopdaily.com,http://localhost:5173,http://localhost:5174,http://localhost:5175"
 
 # Secrets — never in this file:
 #   wrangler secret put TOKEN_SECRET     (openssl rand -base64 48)

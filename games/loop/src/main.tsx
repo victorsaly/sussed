@@ -8,7 +8,7 @@ import '@sussed/ui/identity.css';
 import './styles.css';
 
 // The game's hue: identity.css keys every accent off this one attribute.
-document.documentElement.dataset.game = 'bridges';
+document.documentElement.dataset.game = 'slitherlink';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('no #root');
@@ -17,7 +17,7 @@ createRoot(root).render(
   <StrictMode>
     <PlayerProvider
       options={{
-        game: 'bridges',
+        game: 'loop',
         baseUrl: import.meta.env.VITE_PLAYERS_URL ?? 'https://api.sussed.games',
         sync: import.meta.env.VITE_SYNC !== 'false',
       }}

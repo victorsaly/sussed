@@ -1,0 +1,46 @@
+/*
+ * Per-game identity, the way delulubeats.com does it: stamp data-game on
+ * <html> and the accent changes; everything else in the system stays put.
+ * One hue per game so the nine sites read as siblings, not clones.
+ *
+ * Every light accent holds AA against white (buttons) and the paper ground
+ * (warn text); every dark accent holds AA against the dark ground. Checked
+ * with a WCAG script when chosen — re-check before changing any of these.
+ */
+
+/* The soft tint is derived, so it tracks both the game and the theme. */
+:root[data-game] {
+  --s-accent-soft: color-mix(in srgb, var(--s-accent) 15%, var(--s-surface));
+}
+
+:root[data-game='slitherlink'] { --s-accent: #33588c; }
+:root[data-game='bridges']     { --s-accent: #b4472f; }
+:root[data-game='starbattle']  { --s-accent: #8a6410; }
+:root[data-game='pushpar']     { --s-accent: #55702c; }
+:root[data-game='lastpiece']   { --s-accent: #6d4886; }
+:root[data-game='shikaku']     { --s-accent: #1f6f68; }
+:root[data-game='rewind']      { --s-accent: #96366f; }
+:root[data-game='telegraph']   { --s-accent: #9d2c3c; }
+:root[data-game='shadowplay']  { --s-accent: #5a51a8; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-game='slitherlink'] { --s-accent: #82aede; }
+  :root:not([data-theme='light'])[data-game='bridges']     { --s-accent: #ec6a4e; }
+  :root:not([data-theme='light'])[data-game='starbattle']  { --s-accent: #dfb04a; }
+  :root:not([data-theme='light'])[data-game='pushpar']     { --s-accent: #a5bf5e; }
+  :root:not([data-theme='light'])[data-game='lastpiece']   { --s-accent: #b892d8; }
+  :root:not([data-theme='light'])[data-game='shikaku']     { --s-accent: #58c0b5; }
+  :root:not([data-theme='light'])[data-game='rewind']      { --s-accent: #d886b4; }
+  :root:not([data-theme='light'])[data-game='telegraph']   { --s-accent: #e57384; }
+  :root:not([data-theme='light'])[data-game='shadowplay']  { --s-accent: #a29ae0; }
+}
+
+:root[data-theme='dark'][data-game='slitherlink'] { --s-accent: #82aede; }
+:root[data-theme='dark'][data-game='bridges']     { --s-accent: #ec6a4e; }
+:root[data-theme='dark'][data-game='starbattle']  { --s-accent: #dfb04a; }
+:root[data-theme='dark'][data-game='pushpar']     { --s-accent: #a5bf5e; }
+:root[data-theme='dark'][data-game='lastpiece']   { --s-accent: #b892d8; }
+:root[data-theme='dark'][data-game='shikaku']     { --s-accent: #58c0b5; }
+:root[data-theme='dark'][data-game='rewind']      { --s-accent: #d886b4; }
+:root[data-theme='dark'][data-game='telegraph']   { --s-accent: #e57384; }
+:root[data-theme='dark'][data-game='shadowplay']  { --s-accent: #a29ae0; }

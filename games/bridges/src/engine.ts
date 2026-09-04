@@ -227,6 +227,93 @@ export function isConnected(p: Puzzle, topo: Topology, counts: Counts): boolean 
   return groups === 1;
 }
 
+/**
+ * Which connected piece each island belongs to. `largest` is the id of the
+ * biggest piece, so the UI can mark the smaller ones as cut off.
+ */
+export function components(
+  p: Puzzle,
+  topo: Topology,
+  counts: Counts,
+): { group: number[]; largest: number; count: number } {
+  const n = p.islands.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]!]!;
+      i = parent[i]!;
+    }
+    return i;
+  };
+  for (const e of topo.edges) {
+    if ((counts[e.id] ?? 0) === 0) continue;
+    const ra = find(e.a);
+    const rb = find(e.b);
+    if (ra !== rb) parent[ra] = rb;
+  }
+  const group = p.islands.map((_, i) => find(i));
+  const size = new Map<number, number>();
+  for (const g of group) size.set(g, (size.get(g) ?? 0) + 1);
+  let largest = group[0] ?? 0;
+  for (const [g, s] of size) if (s > (size.get(largest) ?? 0)) largest = g;
+  return { group, largest, count: size.size };
+}
+
+/**
+ * How many more bridges this edge could take right now: limited by the pair
+ * cap of two, by what each end still needs, and by any bridge it would cross.
+ */
+export function capacity(p: Puzzle, topo: Topology, counts: Counts, edgeId: number): number {
+  const e = topo.edges[edgeId]!;
+  const current = counts[edgeId] ?? 0;
+  if (current === 0 && blockedByCrossing(topo, counts, edgeId)) return 0;
+  const deg = degrees(p, topo, counts);
+  const roomA = p.islands[e.a]!.n - (deg[e.a] ?? 0);
+  const roomB = p.islands[e.b]!.n - (deg[e.b] ?? 0);
+  return Math.max(0, Math.min(2 - current, roomA, roomB));
+}
+
+export interface Progress {
+  /** bridges placed so far (a double counts as two) */
+  placed: number;
+  /** bridges the finished puzzle holds */
+  total: number;
+  /** islands whose number is not yet met */
+  islandsLeft: number;
+  /** islands given more than their number */
+  islandsOver: number;
+  /** true when every island's number is met */
+  numbersMet: boolean;
+  /** how many separate networks the placed bridges form */
+  pieces: number;
+}
+
+/** Everything the read-out under the board needs, in one pass. */
+export function progress(p: Puzzle, topo: Topology, counts: Counts): Progress {
+  const deg = degrees(p, topo, counts);
+  let need = 0;
+  let placed = 0;
+  let islandsLeft = 0;
+  let islandsOver = 0;
+  for (let i = 0; i < p.islands.length; i++) {
+    const n = p.islands[i]!.n;
+    const d = deg[i] ?? 0;
+    need += n;
+    placed += d;
+    if (d < n) islandsLeft++;
+    if (d > n) islandsOver++;
+  }
+  const numbersMet = islandsLeft === 0 && islandsOver === 0;
+  return {
+    placed: placed / 2,
+    total: need / 2,
+    islandsLeft,
+    islandsOver,
+    numbersMet,
+    pieces: components(p, topo, counts).count,
+  };
+}
+
 export function isSolved(p: Puzzle, topo: Topology, counts: Counts): boolean {
   const deg = degrees(p, topo, counts);
   for (let i = 0; i < p.islands.length; i++) {

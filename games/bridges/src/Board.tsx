@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Backdrop, HintChain, type ChainArrow, type Lane } from '@sussed/ui';
 import {
   blockedByCrossing,
+  capacity,
+  components,
   degrees,
+  progress,
   type BoardState,
   type Puzzle,
   type Topology,
@@ -22,12 +25,14 @@ import type { Deduction } from './solver';
 const CELL = 46;
 const PAD = 26;
 const R = 17;
+const HOLD_MS = 380;
 
 export function Board({
   puzzle,
   topo,
   state,
   onCycle,
+  onSelect,
   solved,
   look,
   target,
@@ -37,6 +42,8 @@ export function Board({
   topo: Topology;
   state: BoardState;
   onCycle: (edgeId: number) => void;
+  /** the island currently selected, for the caption under the board */
+  onSelect?: (island: number | null) => void;
   solved: boolean;
   /** island to pulse — the first rung of the hint ladder */
   look: number | null;
@@ -46,6 +53,13 @@ export function Board({
   chain: readonly Deduction[];
 }) {
   const [selected, setSelected] = useState<number | null>(null);
+  const [holding, setHolding] = useState<number | null>(null);
+  const holdTimer = useRef<number | null>(null);
+  const holdFired = useRef(false);
+
+  useEffect(() => {
+    onSelect?.(selected);
+  }, [selected, onSelect]);
 
   const width = PAD * 2 + (puzzle.w - 1) * CELL;
   const height = PAD * 2 + (puzzle.h - 1) * CELL;
@@ -89,6 +103,53 @@ export function Board({
 
   const occupied = new Set(puzzle.islands.map((i) => `${i.x},${i.y}`));
 
+  /** Every number met but the network in pieces: mark islands outside the biggest piece. */
+  const stranded = useMemo(() => {
+    const prog = progress(puzzle, topo, state.counts);
+    if (!prog.numbersMet || prog.pieces < 2) return null;
+    const c = components(puzzle, topo, state.counts);
+    return c.group.map((g) => g !== c.largest);
+  }, [puzzle, topo, state.counts]);
+
+  /** Ghost bridges shown while holding an island: what it could still take. */
+  const ghosts = useMemo(() => {
+    if (holding === null) return [];
+    return (topo.incident[holding] ?? [])
+      .map((id) => ({ id, extra: state.marks.has(id) ? 0 : capacity(puzzle, topo, state.counts, id) }))
+      .filter((g) => g.extra > 0);
+  }, [holding, puzzle, topo, state]);
+
+  const clearHold = (): void => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    setHolding(null);
+  };
+
+  const pressIsland = (i: number, ev: React.PointerEvent<SVGGElement>): void => {
+    ev.preventDefault();
+    try {
+      ev.currentTarget.setPointerCapture(ev.pointerId);
+    } catch {
+      /* not every pointer type supports capture; the tap still works */
+    }
+    holdFired.current = false;
+    holdTimer.current = window.setTimeout(() => {
+      holdFired.current = true;
+      holdTimer.current = null;
+      setHolding(i);
+    }, HOLD_MS);
+  };
+
+  const releaseIsland = (i: number): void => {
+    const wasHold = holdFired.current;
+    clearHold();
+    if (!wasHold) tapIsland(i);
+  };
+
+  useEffect(() => clearHold, []);
+
   const tapIsland = (i: number): void => {
     if (selected === null || selected === i) {
       setSelected(selected === i ? null : i);
@@ -112,8 +173,31 @@ export function Board({
       role="group"
       aria-label={`Bridges puzzle, ${puzzle.islands.length} islands`}
       style={{ width: '100%', height: 'auto', maxHeight: '56dvh', touchAction: 'manipulation' }}
+      onContextMenu={(ev) => ev.preventDefault()}
     >
       <Backdrop w={puzzle.w} h={puzzle.h} px={px} skip={occupied} lanes={lanes} />
+
+      {ghosts.map((g) => {
+        const e = topo.edges[g.id]!;
+        const a = puzzle.islands[e.a]!;
+        const b = puzzle.islands[e.b]!;
+        const total = (state.counts[g.id] ?? 0) + g.extra;
+        const off = e.horizontal ? [0, 4] : [4, 0];
+        return (
+          <g key={`ghost-${g.id}`}>
+            {(total === 2 ? [-1, 1] : [0]).map((k, idx) => (
+              <line
+                key={idx}
+                x1={px(a.x) + off[0]! * k}
+                y1={px(a.y) + off[1]! * k}
+                x2={px(b.x) + off[0]! * k}
+                y2={px(b.y) + off[1]! * k}
+                className="bridge bridge-ghost"
+              />
+            ))}
+          </g>
+        );
+      })}
 
       {topo.edges.map((e) => {
         const n = state.counts[e.id] ?? 0;
@@ -204,23 +288,38 @@ export function Board({
       )}
 
       {puzzle.islands.map((is, i) => {
-        const done = deg[i] === is.n;
-        const over = (deg[i] ?? 0) > is.n;
+        const d = deg[i] ?? 0;
+        const remaining = is.n - d;
+        const done = remaining === 0;
+        const over = remaining < 0;
+        const started = d > 0 && !done;
         return (
           <g
             key={i}
-            className={['island', done ? 'is-done' : '', over ? 'is-over' : '',
-              selected === i ? 'is-selected' : '', reachable.has(i) ? 'is-target' : '']
+            className={[
+              'island',
+              done ? 'is-done' : '',
+              over ? 'is-over' : '',
+              selected === i ? 'is-selected' : '',
+              reachable.has(i) ? 'is-target' : '',
+              stranded?.[i] ? 'is-stranded' : '',
+              holding === i ? 'is-held' : '',
+            ]
               .filter(Boolean)
               .join(' ')}
             transform={`translate(${px(is.x)} ${px(is.y)})`}
             role="button"
             tabIndex={0}
-            aria-label={`Island needing ${is.n} bridges, currently ${deg[i]}`}
-            onPointerDown={(ev) => {
-              ev.preventDefault();
-              tapIsland(i);
-            }}
+            aria-label={
+              done
+                ? `Island of ${is.n}, complete`
+                : over
+                  ? `Island of ${is.n}, ${-remaining} too many`
+                  : `Island of ${is.n}, needs ${remaining} more`
+            }
+            onPointerDown={(ev) => pressIsland(i, ev)}
+            onPointerUp={() => releaseIsland(i)}
+            onPointerCancel={clearHold}
             onKeyDown={(ev) => {
               if (ev.key === 'Enter' || ev.key === ' ') {
                 ev.preventDefault();
@@ -229,9 +328,15 @@ export function Board({
             }}
           >
             <circle r={R} />
+            {/* The big number is what is still needed; the total moves to the corner once work starts. */}
             <text textAnchor="middle" dominantBaseline="central" dy="0.5">
-              {is.n}
+              {done ? is.n : over ? `−${-remaining}` : remaining}
             </text>
+            {started && (
+              <text className="total" x={R - 4} y={-R + 5} textAnchor="middle">
+                {is.n}
+              </text>
+            )}
           </g>
         );
       })}

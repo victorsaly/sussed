@@ -1,12 +1,32 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/player" },
-    { "path": "./packages/share" },
-    { "path": "./packages/ui" },
-    { "path": "./packages/pwa" },
-    { "path": "./games/bridges" },
-    { "path": "./services/players" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/player"
+    },
+    {
+      "path": "./packages/share"
+    },
+    {
+      "path": "./packages/ui"
+    },
+    {
+      "path": "./packages/pwa"
+    },
+    {
+      "path": "./games/bridges"
+    },
+    {
+      "path": "./games/twostars"
+    },
+    {
+      "path": "./games/loop"
+    },
+    {
+      "path": "./services/players"
+    }
   ]
 }

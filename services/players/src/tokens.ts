@@ -22,10 +22,12 @@ function b64url(bytes: ArrayBuffer | Uint8Array): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function unb64url(s: string): Uint8Array {
+function unb64url(s: string): Uint8Array<ArrayBuffer> {
   const pad = s.replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(pad + '='.repeat((4 - (pad.length % 4)) % 4));
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
 async function key(secret: string): Promise<CryptoKey> {

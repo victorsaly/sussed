@@ -8,7 +8,9 @@ corepack enable            # gets you pnpm
 pnpm install
 pnpm generate              # build a year of Bridges puzzles
 pnpm verify                # re-solve every one of them — the CI gate
-pnpm dev                   # play at http://localhost:5173
+pnpm dev                   # play Bridges at http://localhost:5173
+pnpm dev:twostars          # Two Stars at http://localhost:5174
+pnpm dev:loop              # Loop at http://localhost:5175
 ```
 
 `pnpm dev` runs entirely offline. Set `VITE_SYNC=false` in `games/bridges/.env`
@@ -23,7 +25,9 @@ if you want to be certain nothing tries to reach the players service.
 | `packages/share` | The share card. Text first, image second |
 | `packages/ui` | Theme tokens and the chrome every game shares |
 | `packages/pwa` | Service worker, install prompt, manifest builder |
-| `games/bridges` | The first game: rules, solver, generator, board |
+| `games/bridges` | The first game: rules, solver, generator, course, board |
+| `games/twostars` | The second: Star Battle. Same files, everything else shared |
+| `games/loop` | The third: Slitherlink. One closed loop from the edge counts |
 | `services/players` | One Cloudflare Worker serving all nine games |
 | `tools/verify.ts` | Re-solves every shipped puzzle. CI fails if any is ambiguous |
 

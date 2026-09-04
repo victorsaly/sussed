@@ -1,0 +1,15 @@
+{
+  "name": "Loop — a daily puzzle from SUSSED",
+  "short_name": "Loop",
+  "description": "Draw one closed loop from the numbers. New every day.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f2f0ec",
+  "background_color": "#f2f0ec",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

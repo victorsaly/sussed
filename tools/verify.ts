@@ -11,26 +11,135 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { allLevels } from '../packages/core/src/levels';
-import { buildTopology, isSolved, type Puzzle } from '../games/bridges/src/engine';
-import { solve } from '../games/bridges/src/solver';
-import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from '../games/bridges/src/levels';
+import { allLevels, type LevelSet } from '../packages/core/src/levels';
+import * as bridges from '../games/bridges/src/engine';
+import { solve as solveBridges } from '../games/bridges/src/solver';
+import { BRIDGES_LEVELS, levelPuzzle as bridgesLevel, teachingFor as bridgesTeaching } from '../games/bridges/src/levels';
+import * as twostars from '../games/twostars/src/engine';
+import { solve as solveTwoStars } from '../games/twostars/src/solver';
+import { TWOSTARS_LEVELS, levelPuzzle as twostarsLevel, teachingFor as twostarsTeaching } from '../games/twostars/src/levels';
+import * as loop from '../games/loop/src/engine';
+import { solve as solveLoop } from '../games/loop/src/solver';
+import { LOOP_LEVELS, levelPuzzle as loopLevel, teachingFor as loopTeaching } from '../games/loop/src/levels';
 
-interface Bundle {
+interface Bundle<P> {
   epoch: string;
   start: string;
-  puzzles: Puzzle[];
+  puzzles: P[];
 }
 
-const GAMES = [{ slug: 'bridges', path: 'games/bridges/public/puzzles.json' }];
+interface Report {
+  count: number;
+  logicOnly: boolean;
+  valid: boolean;
+}
+
+interface Dated {
+  date: string;
+  number: number;
+  difficulty: number;
+}
+
+interface Game<P extends Dated> {
+  slug: string;
+  path: string;
+  /** structural problems with a puzzle, before solving */
+  shape(p: P): string | null;
+  solve(p: P): Report;
+  /** how big a board may be and still count as teaching one rule */
+  size(p: P): number;
+  maxTeachingSize: number;
+  /**
+   * Whether every course board must fall to the solver's techniques alone.
+   * False only where the solver leaves a rule to search — Bridges reasons
+   * about counts, not connectivity, and its connectivity chapter is meant to
+   * be seen, not deduced.
+   */
+  courseMustBeLogic: boolean;
+  levels: LevelSet;
+  levelPuzzle(id: string): P | null;
+  teachingFor(id: string): unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GAMES: Game<any>[] = [
+  {
+    slug: 'bridges',
+    path: 'games/bridges/public/puzzles.json',
+    shape(p: bridges.Puzzle) {
+      if (p.islands.length < 4) return `only ${p.islands.length} islands`;
+      for (const island of p.islands) {
+        if (island.n < 1 || island.n > 8) return `island with impossible count ${island.n}`;
+      }
+      return null;
+    },
+    solve(p: bridges.Puzzle) {
+      const topo = bridges.buildTopology(p);
+      const r = solveBridges(p, 2, topo);
+      return { count: r.count, logicOnly: r.logicOnly, valid: !!r.solution && bridges.isSolved(p, topo, r.solution) };
+    },
+    size: (p: bridges.Puzzle) => p.islands.length,
+    maxTeachingSize: 6,
+    courseMustBeLogic: false,
+    levels: BRIDGES_LEVELS,
+    levelPuzzle: bridgesLevel,
+    teachingFor: bridgesTeaching,
+  },
+  {
+    slug: 'twostars',
+    path: 'games/twostars/public/puzzles.json',
+    shape(p: twostars.Puzzle) {
+      if (p.regions.length !== p.n * p.n) return `grid has ${p.regions.length} cells for n=${p.n}`;
+      const seen = new Set(p.regions);
+      if (seen.size !== p.n) return `${seen.size} regions for n=${p.n}`;
+      for (const r of p.regions) if (r < 0 || r >= p.n) return `region id ${r} out of range`;
+      return null;
+    },
+    solve(p: twostars.Puzzle) {
+      const units = twostars.buildUnits(p);
+      const r = solveTwoStars(p, 2, units);
+      return { count: r.count, logicOnly: r.logicOnly, valid: !!r.solution && twostars.isSolved(p, units, r.solution) };
+    },
+    size: (p: twostars.Puzzle) => p.n,
+    // Two stars per line has no pure-deduction board smaller than 8, so the
+    // chapter that introduces it is the smallest real board.
+    maxTeachingSize: 8,
+    courseMustBeLogic: true,
+    levels: TWOSTARS_LEVELS,
+    levelPuzzle: twostarsLevel,
+    teachingFor: twostarsTeaching,
+  },
+  {
+    slug: 'loop',
+    path: 'games/loop/public/puzzles.json',
+    shape(p: loop.Puzzle) {
+      if (p.clues.length !== p.w * p.h) return `grid has ${p.clues.length} cells for ${p.w}x${p.h}`;
+      const given = p.clues.filter((c) => c >= 0);
+      if (given.length < 4) return `only ${given.length} clues`;
+      for (const c of p.clues) if (c < -1 || c > 3) return `clue ${c} out of range`;
+      return null;
+    },
+    solve(p: loop.Puzzle) {
+      const topo = loop.buildTopology(p);
+      const r = solveLoop(p, 2, topo);
+      return { count: r.count, logicOnly: r.logicOnly, valid: !!r.solution && loop.isSolved(p, topo, r.solution) };
+    },
+    size: (p: loop.Puzzle) => Math.max(p.w, p.h),
+    maxTeachingSize: 4,
+    courseMustBeLogic: true,
+    levels: LOOP_LEVELS,
+    levelPuzzle: loopLevel,
+    teachingFor: loopTeaching,
+  },
+];
 
 let failures = 0;
 
 for (const game of GAMES) {
   const file = resolve(process.cwd(), game.path);
-  let bundle: Bundle;
+  let bundle: Bundle<Dated>;
   try {
-    bundle = JSON.parse(readFileSync(file, 'utf8')) as Bundle;
+    bundle = JSON.parse(readFileSync(file, 'utf8')) as Bundle<Dated>;
   } catch {
     console.error(`✗ ${game.slug}: no puzzle bundle at ${game.path} — run pnpm generate`);
     failures++;
@@ -50,20 +159,14 @@ for (const game of GAMES) {
     }
     seenDates.add(puzzle.date);
 
-    if (puzzle.islands.length < 4) {
-      console.error(`✗ ${where}: only ${puzzle.islands.length} islands`);
+    const problem = game.shape(puzzle);
+    if (problem) {
+      console.error(`✗ ${where}: ${problem}`);
       failures++;
       continue;
     }
-    for (const island of puzzle.islands) {
-      if (island.n < 1 || island.n > 8) {
-        console.error(`✗ ${where}: island with impossible count ${island.n}`);
-        failures++;
-      }
-    }
 
-    const topo = buildTopology(puzzle);
-    const report = solve(puzzle, 2, topo);
+    const report = game.solve(puzzle);
 
     if (report.count === 0) {
       console.error(`✗ ${where}: no solution`);
@@ -71,7 +174,7 @@ for (const game of GAMES) {
     } else if (report.count > 1) {
       console.error(`✗ ${where}: more than one solution — ambiguous`);
       failures++;
-    } else if (!report.solution || !isSolved(puzzle, topo, report.solution)) {
+    } else if (!report.valid) {
       console.error(`✗ ${where}: solver returned a solution that is not valid`);
       failures++;
     }
@@ -90,34 +193,38 @@ for (const game of GAMES) {
   );
 }
 
-/* ---- the teaching course ------------------------------------------------
+/* ---- the teaching courses ----------------------------------------------
    A course level with two answers, or one that needs a guess, teaches the
    wrong lesson at exactly the moment a player is deciding whether to stay. */
-{
-  const levels = allLevels(BRIDGES_LEVELS);
+for (const game of GAMES) {
+  const levels = allLevels(game.levels);
+  let bad = 0;
   for (const ref of levels) {
-    const puzzle = levelPuzzle(ref.id);
+    const puzzle = game.levelPuzzle(ref.id);
     if (!puzzle) {
-      console.error(`✗ course ${ref.id}: no puzzle defined`);
-      failures++;
+      console.error(`✗ ${game.slug} course ${ref.id}: no puzzle defined`);
+      bad++;
       continue;
     }
-    if (!teachingFor(ref.id)) {
-      console.error(`✗ course ${ref.id}: no rule declared — every chapter must teach exactly one`);
-      failures++;
+    if (!game.teachingFor(ref.id)) {
+      console.error(`✗ ${game.slug} course ${ref.id}: no rule declared — every chapter must teach exactly one`);
+      bad++;
     }
-    const topo = buildTopology(puzzle);
-    const report = solve(puzzle, 2, topo);
+    const report = game.solve(puzzle);
     if (report.count !== 1) {
-      console.error(`✗ course ${ref.id}: ${report.count === 0 ? 'no solution' : 'more than one solution'}`);
-      failures++;
+      console.error(`✗ ${game.slug} course ${ref.id}: ${report.count === 0 ? 'no solution' : 'more than one solution'}`);
+      bad++;
+    } else if (game.courseMustBeLogic && !report.logicOnly) {
+      console.error(`✗ ${game.slug} course ${ref.id}: needs a guess — a teaching board must be pure deduction`);
+      bad++;
     }
-    if (puzzle.islands.length > 6) {
-      console.error(`✗ course ${ref.id}: ${puzzle.islands.length} islands — a teaching board should show one rule, not a puzzle`);
-      failures++;
+    if (game.size(puzzle) > game.maxTeachingSize) {
+      console.error(`✗ ${game.slug} course ${ref.id}: too big — a teaching board should show one rule, not a puzzle`);
+      bad++;
     }
   }
-  console.log(`${failures === 0 ? '✓' : '✗'} course: ${levels.length} teaching levels, each with exactly one answer`);
+  failures += bad;
+  console.log(`${bad === 0 ? '✓' : '✗'} ${game.slug} course: ${levels.length} teaching levels, each with exactly one answer`);
 }
 
 if (failures > 0) {

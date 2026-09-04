@@ -9,7 +9,7 @@ than quietly working around it.
 
 ## What this is
 
-A studio of small daily puzzle games. Nine planned, one built. Each game gets
+A studio of small daily puzzle games. Nine planned, three built (Bridges, Two Stars, Loop). Each game gets
 its own keyword domain (bridgesdaily.com, twostars.com…) and links back to the
 studio hub at sussed.games. Free, no ads, no paywall. Built for craft first —
 revenue is a bonus, so nothing here should be traded away for it.
@@ -105,7 +105,9 @@ packages/player   identity · local store · sync · stats     ← the platform
 packages/share    the share card (text first, image second)
 packages/ui       theme tokens + shared chrome
 packages/pwa      service worker, install prompt, manifest
-games/bridges     engine.ts (rules) · solver.ts · generate.ts · React board
+games/bridges     engine.ts (rules) · solver.ts · generate.ts · levels.ts · React board
+games/twostars    same files — Star Battle, two stars per row/column/region
+games/loop        same files — Slitherlink, one closed loop from edge counts
 services/players  one Cloudflare Worker for all nine games
 tools/verify.ts   the CI gate
 ```
@@ -114,9 +116,11 @@ tools/verify.ts   the CI gate
 
 ```bash
 pnpm install
-pnpm generate          # writes games/bridges/public/puzzles.json
+pnpm generate          # writes each game's public/puzzles.json
 pnpm verify            # re-solves every puzzle; CI gate
 pnpm dev               # play Bridges at localhost:5173
+pnpm dev:twostars      # Two Stars at localhost:5174
+pnpm dev:loop          # Loop at localhost:5175
 pnpm typecheck
 pnpm service:dev       # wrangler dev for the players service
 ```

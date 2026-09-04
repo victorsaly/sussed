@@ -2,6 +2,47 @@
 
 .board {
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* What an island could still take, shown only while it is held. */
+.bridge-ghost {
+  stroke: var(--s-ink-3);
+  stroke-dasharray: 2 4;
+  opacity: 0.6;
+}
+
+/* The full number, small, once an island is part-way there. */
+.island .total {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--s-ink-3);
+}
+
+/* Numbers all met but the network in pieces: the cut-off islands go pale. */
+.island.is-stranded circle {
+  fill: var(--s-accent-soft);
+  stroke: var(--s-accent);
+  stroke-dasharray: 3 3;
+}
+.island.is-stranded text {
+  fill: var(--s-accent);
+}
+
+.island.is-held circle {
+  stroke-width: 3;
+}
+
+.progress-line {
+  margin: 8px 0 0;
+  font-family: var(--s-font-mono);
+  font-size: 13px;
+  color: var(--s-ink-3);
+  text-align: center;
+}
+.progress-line.is-warn {
+  color: var(--s-accent);
 }
 
 .bridge {

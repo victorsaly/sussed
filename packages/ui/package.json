@@ -7,11 +7,17 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./identity.css": "./src/identity.css"
   },
   "dependencies": {
     "@sussed/core": "workspace:*",
     "@sussed/player": "workspace:*"
   },
-  "peerDependencies": { "react": ">=18" }
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12"
+  }
 }

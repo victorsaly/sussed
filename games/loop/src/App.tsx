@@ -12,15 +12,15 @@ import {
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
 import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet } from '@sussed/ui';
 import { share } from '@sussed/share';
-import { buildTopology, cycleEdge, isSolved, progress, type BoardState, type Puzzle } from './engine';
-import { deductionChain, nextDeduction, type Deduction } from './solver';
-import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from './levels';
+import { buildTopology, CROSS, cycleEdge, emptyMarks, isSolved, LINE, progress, type Mark, type Puzzle } from './engine';
+import { deductionChain, describeFocus, nextDeduction, type Deduction, type HintFocus } from './solver';
+import { LOOP_LEVELS, levelPuzzle, teachingFor } from './levels';
 import { Board } from './Board';
 import bundle from '../public/puzzles.json';
 
-const GAME = 'bridges';
-const LABEL = 'Bridges';
-const URL = 'https://bridgesdaily.com';
+const GAME = 'loop';
+const LABEL = 'Loop';
+const URL = 'https://loopdaily.com';
 
 interface Bundle {
   epoch: string;
@@ -37,7 +37,7 @@ interface Sitting {
   title: string;
 }
 
-const LEVELS = allLevels(BRIDGES_LEVELS);
+const LEVELS = allLevels(LOOP_LEVELS);
 
 function levelSitting(ref: LevelRef): Sitting {
   const t = teachingFor(ref.id);
@@ -47,7 +47,7 @@ function levelSitting(ref: LevelRef): Sitting {
     puzzle: levelPuzzle(ref.id)!,
     levelIndex: ref.index,
     teaches: t?.teaches ?? null,
-    title: t?.title ?? 'Bridges',
+    title: t?.title ?? LABEL,
   };
 }
 
@@ -55,14 +55,7 @@ function dailySitting(): Sitting {
   const data = bundle as Bundle;
   const today = toIsoDate();
   const puzzle = data.puzzles.find((p) => p.date === today) ?? (data.puzzles[0] as Puzzle);
-  return {
-    mode: 'daily',
-    puzzleId: puzzle.date,
-    puzzle,
-    levelIndex: null,
-    teaches: null,
-    title: 'Bridges',
-  };
+  return { mode: 'daily', puzzleId: puzzle.date, puzzle, levelIndex: null, teaches: null, title: LABEL };
 }
 
 export function App() {
@@ -78,7 +71,7 @@ export function App() {
 
   useEffect(() => {
     let alive = true;
-    void player.progress(BRIDGES_LEVELS).then((progress) => {
+    void player.progress(LOOP_LEVELS).then((progress) => {
       if (!alive) return;
       const next = LEVELS.find((l) => !progress.solved.has(l.id));
       setSitting(next ? levelSitting(next) : dailySitting());
@@ -91,12 +84,9 @@ export function App() {
 
   const puzzle = sitting.puzzle;
   const topo = useMemo(() => buildTopology(puzzle), [puzzle]);
-  const [state, setState] = useState<BoardState>(() => ({
-    counts: new Array<number>(topo.edges.length).fill(0),
-    marks: new Set<number>(),
-  }));
+  const [marks, setMarks] = useState(() => emptyMarks(topo));
 
-  const stack = useRef(new MoveStack<{ edgeId: number; before: BoardState }>());
+  const stack = useRef(new MoveStack<{ edge: number; from: Mark; to: Mark }>());
   const stuck = useRef(new StuckWatcher());
   const [, force] = useState(0);
   const [showStats, setShowStats] = useState(false);
@@ -107,14 +97,13 @@ export function App() {
   const [recorded, setRecorded] = useState(false);
   const [offered, setOffered] = useState(false);
   const [chain, setChain] = useState<Deduction[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
 
-  const solved = useMemo(() => isSolved(puzzle, topo, state.counts), [puzzle, topo, state.counts]);
-  const prog = useMemo(() => progress(puzzle, topo, state.counts), [puzzle, topo, state.counts]);
+  const solved = useMemo(() => isSolved(puzzle, topo, marks), [puzzle, topo, marks]);
+  const prog = useMemo(() => progress(puzzle, topo, marks), [puzzle, topo, marks]);
 
   // Fresh board, fresh everything.
   useEffect(() => {
-    setState({ counts: new Array<number>(topo.edges.length).fill(0), marks: new Set<number>() });
+    setMarks(emptyMarks(topo));
     stack.current = new MoveStack();
     stuck.current = new StuckWatcher();
     setRecorded(false);
@@ -126,13 +115,13 @@ export function App() {
   const source: HintSource<Deduction> = useMemo(
     () => ({
       next: () => {
-        const d = nextDeduction(puzzle, topo, state.counts, state.marks);
+        const d = nextDeduction(puzzle, topo, marks);
         return d ? toStep(d) : null;
       },
-      chain: (max) => deductionChain(puzzle, topo, state.counts, state.marks, max).map(toStep),
-      describeFocus: (f) => `the ${puzzle.islands[f as number]!.n}`,
+      chain: (max) => deductionChain(puzzle, topo, marks, max).map(toStep),
+      describeFocus: (f) => describeFocus(puzzle, f as HintFocus),
     }),
-    [puzzle, topo, state],
+    [puzzle, topo, marks],
   );
 
   const ladder = useRef<HintLadder<Deduction> | null>(null);
@@ -145,12 +134,10 @@ export function App() {
     // must not reset the tier, so it is deliberately not a dependency here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puzzle.id]);
-  // Keep the live source on the existing ladder without resetting its rung.
   (ladder.current as unknown as { source: HintSource<Deduction> }).source = source;
 
   const hints: HintView<Deduction> = ladder.current.view;
 
-  // Offered, never forced: after a quiet spell the button becomes visible.
   useEffect(() => {
     const t = setInterval(() => {
       if (!solved && stuck.current.isStuck && !offered) setOffered(true);
@@ -159,15 +146,11 @@ export function App() {
   }, [solved, offered]);
 
   const applyDeduction = useCallback((d: Deduction) => {
-    setState((s) => {
-      if (d.value === 0) {
-        const marks = new Set(s.marks);
-        marks.add(d.edgeId);
-        return { counts: s.counts, marks };
-      }
-      const counts = s.counts.slice();
-      counts[d.edgeId] = d.value;
-      return { counts, marks: s.marks };
+    if (d.edge < 0) return;
+    setMarks((m) => {
+      const next = m.slice();
+      next[d.edge] = d.value === 'line' ? LINE : d.value === 'empty' ? CROSS : 0;
+      return next;
     });
   }, []);
 
@@ -182,16 +165,12 @@ export function App() {
 
   /* ------------------------------------------------------------- moves */
   const cycle = useCallback(
-    (edgeId: number) => {
+    (edge: number) => {
       if (solved) return;
       stack.current.start();
-      setState((current) => {
-        const next = cycleEdge(puzzle, topo, current, edgeId);
-        if (!next) {
-          shake();
-          return current;
-        }
-        stack.current.push({ edgeId, before: current });
+      setMarks((current) => {
+        const next = cycleEdge(current, edge);
+        stack.current.push({ edge, from: current[edge] ?? 0, to: next[edge] ?? 0 });
         return next;
       });
       stuck.current.touch();
@@ -200,13 +179,17 @@ export function App() {
       ladder.current!.clear();
       force((n) => n + 1);
     },
-    [puzzle, topo, solved],
+    [solved],
   );
 
   const undo = useCallback(() => {
     const move = stack.current.undo();
     if (!move) return;
-    setState(move.before);
+    setMarks((current) => {
+      const next = current.slice();
+      next[move.edge] = move.from;
+      return next;
+    });
     setChain([]);
     ladder.current!.clear();
     force((n) => n + 1);
@@ -273,39 +256,41 @@ export function App() {
   // What is left, in one line. During the course the chapter text does this job.
   const readout = useMemo((): { text: string; warn: boolean } | null => {
     if (solved || sitting.mode === 'level') return null;
-    if (prog.numbersMet && prog.pieces > 1) {
-      return {
-        text: `Every number is met, but the bridges form ${prog.pieces} separate pieces. The lighter islands are cut off.`,
-        warn: true,
-      };
+    if (prog.forks > 0) {
+      return { text: `The line branches at ${prog.forks === 1 ? 'a dot' : `${prog.forks} dots`}. The loop never forks or crosses itself.`, warn: true };
     }
-    const parts = [`${prog.placed} of ${prog.total} bridges`];
-    parts.push(
-      prog.islandsOver > 0
-        ? `${prog.islandsOver} island${prog.islandsOver === 1 ? ' has' : 's have'} too many`
-        : `${prog.islandsLeft} island${prog.islandsLeft === 1 ? '' : 's'} left`,
-    );
-    return { text: parts.join(' · '), warn: prog.islandsOver > 0 };
+    if (prog.cluesOver > 0) {
+      return { text: `${prog.cluesOver} number${prog.cluesOver === 1 ? ' has' : 's have'} too many lines.`, warn: true };
+    }
+    if (prog.closed > 0 && prog.cluesMet < prog.cluesTotal) {
+      return { text: 'A loop has closed with numbers still unmet. There is only ever one loop.', warn: true };
+    }
+    if (prog.closed > 0 && prog.pieces > 1) {
+      return { text: 'A loop has closed but there are lines outside it. There is only ever one loop.', warn: true };
+    }
+    const parts = [`${prog.cluesMet} of ${prog.cluesTotal} numbers met`];
+    if (prog.pieces > 1) parts.push(`${prog.pieces} separate lines`);
+    return { text: parts.join(' · '), warn: false };
   }, [solved, sitting.mode, prog]);
 
   // A quiet caption for the first minute of a daily. Never a modal, never a wall.
   const caption = useMemo((): string | null => {
     if (hints.message) return hints.message;
     if (solved || sitting.mode === 'level') return null;
-    if (prog.placed === 0) return selected === null ? 'Tap an island to start.' : 'Now tap an island in line with it.';
-    if (prog.placed <= 2) return 'Hold an island to see how many bridges it could still take.';
+    if (prog.lines === 0) return 'Tap between two dots to draw a line. Tap again for a cross, once more to clear.';
+    if (prog.lines <= 2) return 'Faint crosses mark sides the lines you have drawn already rule out.';
     return null;
-  }, [hints.message, solved, sitting.mode, prog.placed, selected]);
+  }, [hints.message, solved, sitting.mode, prog.lines]);
 
   return (
     <div className="s-shell">
       <header className="s-bar">
-        <GameLogo game="bridges" title="" />
+        <GameLogo game="slitherlink" title="" />
         <div>
-          <h1 className="s-title">{sitting.mode === 'daily' ? 'Bridges' : sitting.title}</h1>
+          <h1 className="s-title">{sitting.mode === 'daily' ? LABEL : sitting.title}</h1>
           <div className="s-sub">
             {sitting.mode === 'daily'
-              ? `#${puzzle.number} · ${['', 'Mon–Tue', 'Midweek', 'Weekend'][puzzle.difficulty]}`
+              ? `#${puzzle.number} · ${puzzle.w}×${puzzle.h} · ${['', 'Mon–Tue', 'Midweek', 'Weekend'][puzzle.difficulty]}`
               : `Level ${(sitting.levelIndex ?? 0) + 1} of ${LEVELS.length}`}
           </div>
         </div>
@@ -329,12 +314,11 @@ export function App() {
         <Board
           puzzle={puzzle}
           topo={topo}
-          state={state}
+          marks={marks}
           onCycle={cycle}
-          onSelect={setSelected}
           solved={solved}
-          look={hints.focus as number | null}
-          target={hints.target as number | null}
+          look={(hints.focus as HintFocus | null) ?? null}
+          target={(hints.target as number | null) ?? null}
           chain={chain}
         />
       </main>
@@ -390,17 +374,16 @@ export function App() {
 
       <Sheet open={showRules} onClose={() => setShowRules(false)} title="How it works">
         <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--s-ink-2)', lineHeight: 1.7 }}>
-          <li>Join the islands. Tap one, then another.</li>
-          <li>Tap the same pair again for a double, once more to mark it ✗, once more to clear.</li>
-          <li>Each island's number is exactly how many bridges must touch it.</li>
-          <li>Once you start on an island, its big number is what it still needs. The small one is its total.</li>
-          <li>Hold an island to see, in grey, how many bridges it could still take each way.</li>
-          <li>Bridges run straight, and never cross.</li>
-          <li>Everything must end up in one connected network.</li>
+          <li>Draw one closed loop along the grid lines, joining dot to dot.</li>
+          <li>A number says how many of that cell's four sides the loop uses. Cells without a number can have any.</li>
+          <li>The loop never crosses or branches, and there is only one of it.</li>
+          <li>Tap between two dots for a line. Tap again for a cross meaning "not here", once more to clear.</li>
+          <li>Faint crosses appear on their own on sides that can no longer be part of the loop.</li>
+          <li>A number fades once it has its lines.</li>
         </ul>
         <p style={{ color: 'var(--s-ink-3)', fontSize: 14, marginBottom: 0 }}>
           {courseDone
-            ? 'Monday and Tuesday puzzles never need a guess — they can always be worked out.'
+            ? 'Monday to Thursday puzzles never need a guess — they can always be worked out.'
             : 'Finish the short course and the daily puzzle unlocks.'}
         </p>
       </Sheet>
@@ -422,19 +405,9 @@ export function App() {
 function toStep(d: Deduction): HintStep<Deduction> {
   return {
     move: d,
-    focus: d.island,
-    target: d.edgeId,
+    focus: d.focus,
+    target: d.edge >= 0 ? d.edge : null,
     reason: d.reason,
-    kind: d.value === 0 ? 'rule-out' : 'place',
-    label: d.value === 2 ? '×2' : undefined,
+    kind: d.value === 'line' ? 'place' : 'rule-out',
   };
-}
-
-/** An illegal move must fail visibly — a silent no-op teaches nothing. */
-function shake(): void {
-  const el = document.querySelector('.board');
-  if (!el) return;
-  el.classList.remove('s-shake');
-  void (el as HTMLElement).offsetWidth;
-  el.classList.add('s-shake');
 }

@@ -12,15 +12,15 @@ import {
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
 import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet } from '@sussed/ui';
 import { share } from '@sussed/share';
-import { buildTopology, cycleEdge, isSolved, progress, type BoardState, type Puzzle } from './engine';
-import { deductionChain, nextDeduction, type Deduction } from './solver';
-import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from './levels';
+import { buildUnits, cycleCell, DOT, emptyCells, isSolved, progress, STAR, type Mark, type Puzzle } from './engine';
+import { deductionChain, describeFocus, nextDeduction, type Deduction, type HintFocus } from './solver';
+import { TWOSTARS_LEVELS, levelPuzzle, teachingFor } from './levels';
 import { Board } from './Board';
 import bundle from '../public/puzzles.json';
 
-const GAME = 'bridges';
-const LABEL = 'Bridges';
-const URL = 'https://bridgesdaily.com';
+const GAME = 'twostars';
+const LABEL = 'Two Stars';
+const URL = 'https://twostars.com';
 
 interface Bundle {
   epoch: string;
@@ -37,7 +37,7 @@ interface Sitting {
   title: string;
 }
 
-const LEVELS = allLevels(BRIDGES_LEVELS);
+const LEVELS = allLevels(TWOSTARS_LEVELS);
 
 function levelSitting(ref: LevelRef): Sitting {
   const t = teachingFor(ref.id);
@@ -47,7 +47,7 @@ function levelSitting(ref: LevelRef): Sitting {
     puzzle: levelPuzzle(ref.id)!,
     levelIndex: ref.index,
     teaches: t?.teaches ?? null,
-    title: t?.title ?? 'Bridges',
+    title: t?.title ?? LABEL,
   };
 }
 
@@ -55,14 +55,7 @@ function dailySitting(): Sitting {
   const data = bundle as Bundle;
   const today = toIsoDate();
   const puzzle = data.puzzles.find((p) => p.date === today) ?? (data.puzzles[0] as Puzzle);
-  return {
-    mode: 'daily',
-    puzzleId: puzzle.date,
-    puzzle,
-    levelIndex: null,
-    teaches: null,
-    title: 'Bridges',
-  };
+  return { mode: 'daily', puzzleId: puzzle.date, puzzle, levelIndex: null, teaches: null, title: LABEL };
 }
 
 export function App() {
@@ -78,7 +71,7 @@ export function App() {
 
   useEffect(() => {
     let alive = true;
-    void player.progress(BRIDGES_LEVELS).then((progress) => {
+    void player.progress(TWOSTARS_LEVELS).then((progress) => {
       if (!alive) return;
       const next = LEVELS.find((l) => !progress.solved.has(l.id));
       setSitting(next ? levelSitting(next) : dailySitting());
@@ -90,13 +83,10 @@ export function App() {
   }, [player]);
 
   const puzzle = sitting.puzzle;
-  const topo = useMemo(() => buildTopology(puzzle), [puzzle]);
-  const [state, setState] = useState<BoardState>(() => ({
-    counts: new Array<number>(topo.edges.length).fill(0),
-    marks: new Set<number>(),
-  }));
+  const units = useMemo(() => buildUnits(puzzle), [puzzle]);
+  const [cells, setCells] = useState(() => emptyCells(puzzle));
 
-  const stack = useRef(new MoveStack<{ edgeId: number; before: BoardState }>());
+  const stack = useRef(new MoveStack<{ cell: number; from: Mark; to: Mark }>());
   const stuck = useRef(new StuckWatcher());
   const [, force] = useState(0);
   const [showStats, setShowStats] = useState(false);
@@ -107,32 +97,31 @@ export function App() {
   const [recorded, setRecorded] = useState(false);
   const [offered, setOffered] = useState(false);
   const [chain, setChain] = useState<Deduction[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
 
-  const solved = useMemo(() => isSolved(puzzle, topo, state.counts), [puzzle, topo, state.counts]);
-  const prog = useMemo(() => progress(puzzle, topo, state.counts), [puzzle, topo, state.counts]);
+  const solved = useMemo(() => isSolved(puzzle, units, cells), [puzzle, units, cells]);
+  const prog = useMemo(() => progress(puzzle, units, cells), [puzzle, units, cells]);
 
   // Fresh board, fresh everything.
   useEffect(() => {
-    setState({ counts: new Array<number>(topo.edges.length).fill(0), marks: new Set<number>() });
+    setCells(emptyCells(puzzle));
     stack.current = new MoveStack();
     stuck.current = new StuckWatcher();
     setRecorded(false);
     setChain([]);
     setOffered(false);
-  }, [topo]);
+  }, [puzzle, units]);
 
   /* ------------------------------------------------------------- hints */
   const source: HintSource<Deduction> = useMemo(
     () => ({
       next: () => {
-        const d = nextDeduction(puzzle, topo, state.counts, state.marks);
+        const d = nextDeduction(puzzle, units, cells);
         return d ? toStep(d) : null;
       },
-      chain: (max) => deductionChain(puzzle, topo, state.counts, state.marks, max).map(toStep),
-      describeFocus: (f) => `the ${puzzle.islands[f as number]!.n}`,
+      chain: (max) => deductionChain(puzzle, units, cells, max).map(toStep),
+      describeFocus: (f) => describeFocus(f as HintFocus),
     }),
-    [puzzle, topo, state],
+    [puzzle, units, cells],
   );
 
   const ladder = useRef<HintLadder<Deduction> | null>(null);
@@ -145,12 +134,10 @@ export function App() {
     // must not reset the tier, so it is deliberately not a dependency here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puzzle.id]);
-  // Keep the live source on the existing ladder without resetting its rung.
   (ladder.current as unknown as { source: HintSource<Deduction> }).source = source;
 
   const hints: HintView<Deduction> = ladder.current.view;
 
-  // Offered, never forced: after a quiet spell the button becomes visible.
   useEffect(() => {
     const t = setInterval(() => {
       if (!solved && stuck.current.isStuck && !offered) setOffered(true);
@@ -159,15 +146,11 @@ export function App() {
   }, [solved, offered]);
 
   const applyDeduction = useCallback((d: Deduction) => {
-    setState((s) => {
-      if (d.value === 0) {
-        const marks = new Set(s.marks);
-        marks.add(d.edgeId);
-        return { counts: s.counts, marks };
-      }
-      const counts = s.counts.slice();
-      counts[d.edgeId] = d.value;
-      return { counts, marks: s.marks };
+    if (d.cell < 0) return;
+    setCells((c) => {
+      const next = c.slice();
+      next[d.cell] = d.value === 'star' ? STAR : d.value === 'empty' ? DOT : 0;
+      return next;
     });
   }, []);
 
@@ -182,16 +165,12 @@ export function App() {
 
   /* ------------------------------------------------------------- moves */
   const cycle = useCallback(
-    (edgeId: number) => {
+    (cell: number) => {
       if (solved) return;
       stack.current.start();
-      setState((current) => {
-        const next = cycleEdge(puzzle, topo, current, edgeId);
-        if (!next) {
-          shake();
-          return current;
-        }
-        stack.current.push({ edgeId, before: current });
+      setCells((current) => {
+        const next = cycleCell(current, cell);
+        stack.current.push({ cell, from: current[cell] ?? 0, to: next[cell] ?? 0 });
         return next;
       });
       stuck.current.touch();
@@ -200,13 +179,17 @@ export function App() {
       ladder.current!.clear();
       force((n) => n + 1);
     },
-    [puzzle, topo, solved],
+    [solved],
   );
 
   const undo = useCallback(() => {
     const move = stack.current.undo();
     if (!move) return;
-    setState(move.before);
+    setCells((current) => {
+      const next = current.slice();
+      next[move.cell] = move.from;
+      return next;
+    });
     setChain([]);
     ladder.current!.clear();
     force((n) => n + 1);
@@ -273,39 +256,34 @@ export function App() {
   // What is left, in one line. During the course the chapter text does this job.
   const readout = useMemo((): { text: string; warn: boolean } | null => {
     if (solved || sitting.mode === 'level') return null;
-    if (prog.numbersMet && prog.pieces > 1) {
-      return {
-        text: `Every number is met, but the bridges form ${prog.pieces} separate pieces. The lighter islands are cut off.`,
-        warn: true,
-      };
+    if (prog.touching > 0) {
+      return { text: `${prog.touching === 1 ? 'Two stars are' : 'Some stars are'} touching. Stars never touch, not even at a corner.`, warn: true };
     }
-    const parts = [`${prog.placed} of ${prog.total} bridges`];
-    parts.push(
-      prog.islandsOver > 0
-        ? `${prog.islandsOver} island${prog.islandsOver === 1 ? ' has' : 's have'} too many`
-        : `${prog.islandsLeft} island${prog.islandsLeft === 1 ? '' : 's'} left`,
-    );
-    return { text: parts.join(' · '), warn: prog.islandsOver > 0 };
-  }, [solved, sitting.mode, prog]);
+    if (prog.over > 0) {
+      return { text: `${prog.over} line${prog.over === 1 ? ' has' : 's have'} more than ${puzzle.stars} stars.`, warn: true };
+    }
+    const left = prog.regionsLeft;
+    return { text: `${prog.placed} of ${prog.total} stars · ${left} region${left === 1 ? '' : 's'} left`, warn: false };
+  }, [solved, sitting.mode, prog, puzzle.stars]);
 
   // A quiet caption for the first minute of a daily. Never a modal, never a wall.
   const caption = useMemo((): string | null => {
     if (hints.message) return hints.message;
     if (solved || sitting.mode === 'level') return null;
-    if (prog.placed === 0) return selected === null ? 'Tap an island to start.' : 'Now tap an island in line with it.';
-    if (prog.placed <= 2) return 'Hold an island to see how many bridges it could still take.';
+    if (prog.placed === 0) return 'Tap a cell to place a star. Tap again for a dot, once more to clear.';
+    if (prog.placed === 1) return 'The faint dots are cells that can no longer hold a star.';
     return null;
-  }, [hints.message, solved, sitting.mode, prog.placed, selected]);
+  }, [hints.message, solved, sitting.mode, prog.placed]);
 
   return (
     <div className="s-shell">
       <header className="s-bar">
-        <GameLogo game="bridges" title="" />
+        <GameLogo game="starbattle" title="" />
         <div>
-          <h1 className="s-title">{sitting.mode === 'daily' ? 'Bridges' : sitting.title}</h1>
+          <h1 className="s-title">{sitting.mode === 'daily' ? LABEL : sitting.title}</h1>
           <div className="s-sub">
             {sitting.mode === 'daily'
-              ? `#${puzzle.number} · ${['', 'Mon–Tue', 'Midweek', 'Weekend'][puzzle.difficulty]}`
+              ? `#${puzzle.number} · ${puzzle.n}×${puzzle.n} · ${['', 'Mon–Tue', 'Midweek', 'Weekend'][puzzle.difficulty]}`
               : `Level ${(sitting.levelIndex ?? 0) + 1} of ${LEVELS.length}`}
           </div>
         </div>
@@ -328,13 +306,12 @@ export function App() {
       <main style={{ display: 'grid', placeItems: 'center', flex: 1 }}>
         <Board
           puzzle={puzzle}
-          topo={topo}
-          state={state}
+          units={units}
+          cells={cells}
           onCycle={cycle}
-          onSelect={setSelected}
           solved={solved}
-          look={hints.focus as number | null}
-          target={hints.target as number | null}
+          look={(hints.focus as HintFocus | null) ?? null}
+          target={(hints.target as number | null) ?? null}
           chain={chain}
         />
       </main>
@@ -390,13 +367,11 @@ export function App() {
 
       <Sheet open={showRules} onClose={() => setShowRules(false)} title="How it works">
         <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--s-ink-2)', lineHeight: 1.7 }}>
-          <li>Join the islands. Tap one, then another.</li>
-          <li>Tap the same pair again for a double, once more to mark it ✗, once more to clear.</li>
-          <li>Each island's number is exactly how many bridges must touch it.</li>
-          <li>Once you start on an island, its big number is what it still needs. The small one is its total.</li>
-          <li>Hold an island to see, in grey, how many bridges it could still take each way.</li>
-          <li>Bridges run straight, and never cross.</li>
-          <li>Everything must end up in one connected network.</li>
+          <li>Place stars so that every row, every column and every outlined region has the same number, shown at the top.</li>
+          <li>Stars never touch, not even at a corner.</li>
+          <li>Tap a cell for a star. Tap again for a dot meaning "not here", once more to clear.</li>
+          <li>Faint dots appear on their own in cells that can no longer hold a star.</li>
+          <li>A region turns green once it has its stars.</li>
         </ul>
         <p style={{ color: 'var(--s-ink-3)', fontSize: 14, marginBottom: 0 }}>
           {courseDone
@@ -422,19 +397,9 @@ export function App() {
 function toStep(d: Deduction): HintStep<Deduction> {
   return {
     move: d,
-    focus: d.island,
-    target: d.edgeId,
+    focus: d.focus,
+    target: d.cell >= 0 ? d.cell : null,
     reason: d.reason,
-    kind: d.value === 0 ? 'rule-out' : 'place',
-    label: d.value === 2 ? '×2' : undefined,
+    kind: d.value === 'star' ? 'place' : 'rule-out',
   };
-}
-
-/** An illegal move must fail visibly — a silent no-op teaches nothing. */
-function shake(): void {
-  const el = document.querySelector('.board');
-  if (!el) return;
-  el.classList.remove('s-shake');
-  void (el as HTMLElement).offsetWidth;
-  el.classList.add('s-shake');
 }

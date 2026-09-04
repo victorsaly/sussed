@@ -9,7 +9,7 @@
  * down, every game still works.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context, type Next } from 'hono';
 import { cors } from 'hono/cors';
 import {
   generateRegistrationOptions,
@@ -43,7 +43,7 @@ app.use('*', async (c, next) => {
 });
 
 /** Bearer auth. Every route below /auth requires it. */
-async function requireAuth(c: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) {
+async function requireAuth(c: Context<Ctx>, next: Next) {
   const header = c.req.header('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   const claims = await verify(token, c.env.TOKEN_SECRET);
