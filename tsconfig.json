@@ -26,6 +26,9 @@
       "path": "./games/loop"
     },
     {
+      "path": "./games/arrows"
+    },
+    {
       "path": "./services/players"
     }
   ]
