@@ -1,9 +1,34 @@
+## One workflow: the gate, and — on main — the deploy behind it.
+##
+## These were two workflows doing the same expensive work twice. Generating a
+## year of puzzles is measured at about twelve minutes, almost all of it Loop
+## (740s) and Two Stars (249s); Bridges takes 1.6s and Arrows 0.1s, because
+## Arrows constructs its boards rather than rejection-sampling them. Running
+## that in both a CI workflow and a Pages workflow, concurrently, bought
+## nothing and cost twenty-four minutes of compute per push.
+##
+## The gate still comes first and the deploy is downstream of it: a board that
+## cannot be cleared, a puzzle with two solutions, or an arrowhead that lies
+## about where its path leaves fails here, and nothing ships past a red verify.
+##
+## One-time setup in the repo: Settings → Pages → Source → GitHub Actions.
+
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -30,22 +55,54 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      # Puzzles are regenerated here rather than trusted from the repo, so a
-      # change to the generator can never quietly ship worse puzzles.
+      # The bundle is keyed by date because a generator run starts from today,
+      # so the cache turns over daily on purpose — a stale bundle would leave
+      # `dailySitting()` falling back to the first puzzle in the file.
+      - id: day
+        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore generated puzzles
+        id: puzzles
+        uses: actions/cache@v4
+        with:
+          path: games/*/public/puzzles.json
+          key: puzzles-${{ steps.day.outputs.today }}-${{ hashFiles('games/*/src/engine.ts', 'games/*/src/solver.ts', 'games/*/src/generate.ts', 'games/*/src/construct.ts', 'packages/core/src/**') }}
+
+      # Regenerated rather than trusted from the repo, so a change to a
+      # generator can never quietly ship worse puzzles. Skipped only when the
+      # cache key already covers this exact generator source on this date.
       - name: Generate a year of puzzles
+        if: steps.puzzles.outputs.cache-hit != 'true'
         run: pnpm generate
 
-      # The gate. Every shipped puzzle is re-solved from scratch; the build
-      # fails if any has zero or more than one solution, or if an "easy" one
-      # turns out to need guessing.
+      # Always runs, cache hit or not. This is the gate, and a restored bundle
+      # gets exactly the same scrutiny as a freshly generated one — every
+      # puzzle re-solved from scratch. The generator does not mark its own
+      # homework, and neither does the cache.
       - name: Verify every puzzle
         run: pnpm verify
 
-      - name: Build games
-        run: pnpm build
+      # A project page lives at /<repo>/, so every game is built for its own
+      # sub-path under that. On a custom domain this becomes SITE_BASE=/.
+      - name: Build the site
+        run: pnpm site
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/configure-pages@v5
+        if: github.ref == 'refs/heads/main'
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
         with:
-          name: games
-          path: games/*/dist
-          retention-days: 7
+          path: _site
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
