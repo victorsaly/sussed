@@ -34,9 +34,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose — action-setup v4 refuses to run when the
+      # version is also pinned by `packageManager` in package.json, which it is.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
