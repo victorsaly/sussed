@@ -25,8 +25,10 @@ INK = (23, 23, 26)       # --s-ink
 WHITE = (255, 255, 255)  # --s-surface
 
 ACCENT = {
-    'bridges': (180, 71, 47),   # #b4472f
-    'arrows': (122, 75, 150),   # #7a4b96
+    'bridges': (180, 71, 47),    # #b4472f
+    'arrows': (122, 75, 150),    # #7a4b96
+    'twostars': (138, 100, 16),  # #8a6410, the starbattle hue
+    'loop': (51, 88, 140),       # #33588c, the slitherlink hue
 }
 # Arrows draws in its own warm maze ink rather than the text colour.
 LINE = (74, 59, 40)          # --s-line
@@ -107,7 +109,56 @@ def arrows_mark(d, s, c, k):
     )
 
 
-MARKS = {'bridges': bridges_mark, 'arrows': arrows_mark}
+def _star(cx, cy, r):
+    """Five points, one up. Same geometry as the star in GameLogo."""
+    import math
+    pts = []
+    for k in range(10):
+        radius = r if k % 2 == 0 else r * 0.42
+        a = math.radians(-90 + k * 36)
+        pts.append((cx + radius * math.cos(a), cy + radius * math.sin(a)))
+    return pts
+
+
+def twostars_mark(d, s, c, k):
+    """Two stars that do not touch — the rule, and the reason the game is
+    called what it is. The gap between them is the mark."""
+    big, small = k * 0.24, k * 0.175
+    d.polygon(_star(c - k * 0.17, c - k * 0.15, big), fill=ACCENT['twostars'])
+    d.polygon(_star(c + k * 0.20, c + k * 0.19, small), fill=ACCENT['twostars'])
+
+
+def loop_mark(d, s, c, k):
+    """One closed loop threaded through a lattice of dots.
+
+    The dots go on TOP of the line, which is how a Slitherlink board actually
+    looks: the lattice is what is there before anyone draws anything, and the
+    loop runs from dot to dot. Drawn under the line they simply vanish, which
+    is what the first version did — it read as a plain blue shape."""
+    PATH = [(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (1.0, 0.5), (1.0, 1.0), (0.0, 1.0)]
+    # Inset, so the loop does not run into the edge of the icon.
+    scale = k * 0.82
+    ox, oy = c - scale / 2, c - scale / 2
+    width = max(2, int(scale * 0.11))
+    pts = [(x * scale + ox, y * scale + oy) for x, y in PATH]
+
+    d.line(pts + [pts[0]], fill=ACCENT['loop'], width=width, joint='curve')
+    for x, y in pts:
+        d.ellipse([x - width / 2, y - width / 2, x + width / 2, y + width / 2], fill=ACCENT['loop'])
+
+    r = scale * 0.045
+    for gx in (0.0, 0.5, 1.0):
+        for gy in (0.0, 0.5, 1.0):
+            x, y = gx * scale + ox, gy * scale + oy
+            d.ellipse([x - r, y - r, x + r, y + r], fill=INK)
+
+
+MARKS = {
+    'bridges': bridges_mark,
+    'arrows': arrows_mark,
+    'twostars': twostars_mark,
+    'loop': loop_mark,
+}
 
 
 def mark(game, size, content=1.0):
