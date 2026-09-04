@@ -23,6 +23,50 @@ down, discovered by people who go looking.
 
 If a change puts anything between arriving and playing, it is wrong.
 
+## What ships first, and why
+
+Four games now exist: **bridges**, **twostars**, **loop**, **arrows**. Existing
+is not the same as launching, and the order is a decision, not a preference.
+
+**Arrows Out launches first.** It is the only one that passes the five-second
+test: hand someone the phone with the board open and say nothing, and an arrow
+is a drawn instruction they already understand. Every other game needs at least
+a sentence, and a stranger arriving from a link will not read one.
+
+**Loop (Slitherlink) launches last, and that is deliberate.** It is the best
+puzzle here and the coldest start on the whole slate — a grid of scattered
+numbers with no drawn goal. It was ranked ninth of nine for exactly this reason.
+Building it early was fine; launching it early would not be. It goes out once
+other games are sending it players who already trust the studio, at which point
+its solver becomes the thing worth open-sourcing and writing about.
+
+So: build in whatever order is interesting, but **launch legible-first**. If a
+session proposes leading with a deduction game, that contradicts a decision that
+was reasoned through, and it should say so out loud rather than quietly reorder.
+
+
+## Prove the mechanic before building the UI
+
+Write the solver first and measure the game with it. A mechanic that does not
+survive that measurement will not survive players, and finding out costs hours
+now against weeks after a launch.
+
+The worked example is Arrows Out. The original rule — tap an arrow, it slides
+until blocked, and leaves if it reaches the edge — turned out to have no puzzle
+in it. Across 400 random boards, every solvable board could be cleared by
+tapping whatever moved, in any order, and par always equalled the arrow count.
+
+The cause is structural and worth carrying to the next game: **a game whose
+only action removes pieces is confluent.** Taking a piece off the board never
+makes anything harder, so if a solution exists at all, greedy finds it. Adding
+walls did not help — it only made boards unsolvable.
+
+The fix was to add an action that can be spent badly: tapping a blocked arrow
+turns it 90°, so a wrong turn costs a tap. Note what the fix preserves — no
+board can become unsolvable, because an arrow can always be turned back. Aim
+for that shape: a real cost to think about, and no way to be stranded.
+
+
 ## Architecture, in one paragraph
 
 Puzzles are generated **at build time** by a Node script, verified by a solver
