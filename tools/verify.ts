@@ -21,8 +21,19 @@ import { TWOSTARS_LEVELS, levelPuzzle as twostarsLevel, teachingFor as twostarsT
 import * as loop from '../games/loop/src/engine';
 import { solve as solveLoop } from '../games/loop/src/solver';
 import { LOOP_LEVELS, levelPuzzle as loopLevel, teachingFor as loopTeaching } from '../games/loop/src/levels';
-import { parFloor, type Puzzle as ArrowsPuzzle } from '../games/arrows/src/engine';
-import { solve as solveArrows } from '../games/arrows/src/solver';
+import {
+  GLYPH,
+  density as arrowsDensity,
+  headAligned,
+  isContiguous,
+  type Puzzle as ArrowsPuzzle,
+} from '../games/arrows/src/engine';
+import { rate as rateArrows, solve as solveArrows } from '../games/arrows/src/solver';
+import {
+  ARROWS_LEVELS,
+  levelPuzzle as arrowsLevelPuzzle,
+  teachingFor as arrowsTeachingFor,
+} from '../games/arrows/src/levels';
 
 interface Bundle<P> {
   epoch: string;
@@ -229,13 +240,25 @@ for (const game of GAMES) {
   console.log(`${bad === 0 ? '✓' : '✗'} ${game.slug} course: ${levels.length} teaching levels, each with exactly one answer`);
 }
 
-/* ---- par-based games ----------------------------------------------------
+/* ---- Arrows -------------------------------------------------------------
    Arrows deliberately sits outside the GAMES registry above. That registry
-   verifies one property — exactly one solution — and Arrows has no such
-   property: every board has many solutions and the promise is the PAR, the
-   fewest taps that clear it. A par printed under a board is a promise, and
-   every score built on it inherits the lie if it is wrong, so each shipped
-   puzzle is re-solved from scratch and its par compared. */
+   verifies one property — exactly one solution — and Arrows cannot hold it.
+   The game is confluent: removing a path never blocks another, so if a board
+   can be cleared at all then any greedy order clears it, and "the" solution
+   does not exist.
+
+   Its guarantee is a different one, and these are the four things that have to
+   be true for it to hold:
+
+     1. the board fully clears, so nobody is ever stranded;
+     2. every arrowhead points the way its path actually leaves;
+     3. every path is a real contiguous run of distinct in-bounds cells;
+     4. the difficulty printed on it is the difficulty the solver measures.
+
+   An easy board gets a fifth check, which is where the studio rule about
+   Monday and Tuesday lands for a game with nothing to deduce: at no moment may
+   fewer than a third of the paths still on the board be free, so there is
+   always something plainly there to see. */
 {
   const file = resolve(process.cwd(), 'games/arrows/public/puzzles.json');
   let bundle: { puzzles: ArrowsPuzzle[] } | null = null;
@@ -249,6 +272,7 @@ for (const game of GAMES) {
     const before = failures;
     const t0 = Date.now();
     const seen = new Set<string>();
+    let tightest = 1;
 
     for (const puzzle of bundle.puzzles) {
       const where = `arrows ${puzzle.date} (#${puzzle.number})`;
@@ -258,34 +282,89 @@ for (const game of GAMES) {
       }
       seen.add(puzzle.date);
 
-      // Every arrow must leave, and leaving costs a tap, so this floor is
-      // arithmetic. A par below it means something is badly wrong.
-      const floor = parFloor(puzzle);
-      if (puzzle.par < floor) {
-        console.error(`✗ ${where}: par ${puzzle.par} below the floor of ${floor}`);
-        failures++;
+      for (const path of puzzle.paths) {
+        if (!isContiguous(puzzle, path)) {
+          console.error(`✗ ${where}: a path is not a contiguous run of distinct cells`);
+          failures++;
+          break;
+        }
+        if (!headAligned(puzzle, path)) {
+          console.error(
+            `✗ ${where}: an arrowhead points ${GLYPH[path.dir]} but its path does not leave that way`,
+          );
+          failures++;
+          break;
+        }
       }
 
       const report = solveArrows(puzzle);
-      if (report.unrated) {
-        console.error(`✗ ${where}: solver could not prove a par within budget`);
-        failures++;
-      } else if (report.par !== puzzle.par) {
-        console.error(`✗ ${where}: shipped par ${puzzle.par}, solver says ${report.par}`);
+      if (!report.cleared) {
+        console.error(`✗ ${where}: strands ${report.stranded} path(s) — the board never comes apart`);
         failures++;
       }
+      if (rateArrows(report) !== puzzle.difficulty) {
+        console.error(
+          `✗ ${where}: shipped as difficulty ${puzzle.difficulty}, solver measures ${rateArrows(report)}`,
+        );
+        failures++;
+      }
+      if (puzzle.difficulty === 1 && report.minFreeRatio < 0.33) {
+        console.error(
+          `✗ ${where}: marked easy but narrows to ${(report.minFreeRatio * 100).toFixed(0)}% of paths free`,
+        );
+        failures++;
+      }
+      tightest = Math.min(tightest, report.minFreeRatio);
+    }
 
-      // Monday and Tuesday promise a board with nothing in anything's way.
-      if (puzzle.difficulty === 1 && puzzle.par !== floor) {
-        console.error(`✗ ${where}: marked easy but needs ${puzzle.par - floor} rotation(s)`);
+    /* The course gets the same treatment, plus the one rule that only applies
+       to teaching: level one cannot be failed. Not "is easy" — cannot be
+       failed. Every path on it must be free from the opening position, so
+       there is no tap that produces a miss and no way to learn the wrong
+       lesson in the first five seconds. */
+    for (const ref of allLevels(ARROWS_LEVELS)) {
+      const puzzle = arrowsLevelPuzzle(ref.id);
+      const where = `arrows course ${ref.id}`;
+      if (!puzzle) {
+        console.error(`✗ ${where}: no puzzle defined`);
+        failures++;
+        continue;
+      }
+      if (!arrowsTeachingFor(ref.id)) {
+        console.error(`✗ ${where}: no rule declared — every chapter must teach exactly one`);
+        failures++;
+      }
+      for (const path of puzzle.paths) {
+        if (!isContiguous(puzzle, path) || !headAligned(puzzle, path)) {
+          console.error(`✗ ${where}: a hand-authored path is broken or its arrowhead lies`);
+          failures++;
+          break;
+        }
+      }
+      const report = solveArrows(puzzle);
+      if (!report.cleared) {
+        console.error(`✗ ${where}: strands ${report.stranded} path(s)`);
+        failures++;
+      }
+      if (ref.index === 0 && (report.freeCurve[0] ?? 0) !== puzzle.paths.length) {
+        console.error(
+          `✗ ${where}: level one must be unfailable — ${report.freeCurve[0] ?? 0} of ${puzzle.paths.length} paths can go`,
+        );
+        failures++;
+      }
+      if (puzzle.paths.length > 10) {
+        console.error(`✗ ${where}: too big — a teaching board should show one rule, not a puzzle`);
         failures++;
       }
     }
 
-    const rotations = bundle.puzzles.reduce((n, p) => n + (p.par - parFloor(p)), 0);
+    const avgDensity =
+      (bundle.puzzles.reduce((n, p) => n + arrowsDensity(p), 0) / bundle.puzzles.length) * 100;
     console.log(
-      `${failures === before ? '✓' : '✗'} arrows: ${bundle.puzzles.length} pars re-derived in ` +
-        `${((Date.now() - t0) / 1000).toFixed(1)}s · ${rotations} rotations across the set`,
+      `${failures === before ? '✓' : '✗'} arrows: ${bundle.puzzles.length} boards + ` +
+        `${allLevels(ARROWS_LEVELS).length} course levels unthreaded in ` +
+        `${((Date.now() - t0) / 1000).toFixed(1)}s · ${avgDensity.toFixed(0)}% full · ` +
+        `tightest moment ${(tightest * 100).toFixed(0)}% free`,
     );
   }
 }

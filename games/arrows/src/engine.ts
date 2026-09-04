@@ -1,24 +1,34 @@
 /**
  * Arrows Out — rules only. Pure TypeScript, no React, no DOM.
  *
- * Tap an arrow. If its path is clear it slides that way, and if nothing stops
- * it before the edge it leaves the board. If something IS in the way, the tap
- * turns it 90° instead. Clear the board. Every tap counts, and each puzzle
- * ships with the fewest taps that will do it.
+ * A path is a run of cells with an arrowhead at one end. Tap it and the whole
+ * path threads out of the board head first, following its own track. It can
+ * only go if the straight run from its arrowhead to the edge is clear. Tap a
+ * blocked path and nothing moves — that is a miss, and misses are the score.
  *
- * That rotation rule is load-bearing, and it replaced an earlier design where a
- * blocked arrow simply refused to move. The reason is worth recording, because
- * it is not obvious and it cost a solver to find:
+ * This mechanic replaced an earlier one, and the reason is worth recording
+ * because it cost two solvers to find.
  *
- *   A game whose only action REMOVES pieces is confluent. Taking a piece off
- *   the board never makes anything harder, so if a solution exists at all, you
- *   can reach it by tapping whatever moves, in any order. Measured over 400
- *   random boards: every solvable one could be cleared greedily, and par always
- *   equalled the arrow count. There was no decision in it.
+ * The first design was one arrow per cell: tap it, it slides, it leaves. That
+ * measured as no puzzle at all. A game whose only action REMOVES pieces is
+ * confluent — taking a piece off the board never makes anything harder — so if
+ * a solution exists you reach it by tapping whatever moves, in any order.
+ * Across 400 boards, every solvable one fell to that, and par always equalled
+ * the arrow count.
  *
- * Rotation is what introduces a cost that can be spent badly. It also means no
- * board can ever become unsolvable — you can always turn an arrow back around —
- * so a player is never stranded, only slower. Forgiving to play, real to master.
+ * The second design fought the confluence: tapping a blocked arrow turned it
+ * 90°, so a wrong turn cost a tap. That worked, and it is in the git history.
+ *
+ * This third design accepts the confluence instead. Order still never matters
+ * and greedy still always clears the board — but on a board eighty per cent
+ * full, with a dozen interlocking paths, SEEING which arrowhead has a clear run
+ * is the whole game. The difficulty moved from planning to perception, which is
+ * the half that survives a stranger's first five seconds.
+ *
+ * The consequence has to be stated rather than hidden: Arrows cannot claim the
+ * one-solution invariant the deduction games hold. Its guarantee is different —
+ * every shipped board fully clears, and no sequence of taps can strand you —
+ * and `tools/verify.ts` proves that board by board.
  */
 
 export type Dir = 0 | 1 | 2 | 3; // N E S W
@@ -27,9 +37,17 @@ export const DX: readonly number[] = [0, 1, 0, -1];
 export const DY: readonly number[] = [-1, 0, 1, 0];
 export const GLYPH = ['↑', '→', '↓', '←'] as const;
 
-export interface TileDef {
-  x: number;
-  y: number;
+/**
+ * One path, ordered tail first and head last.
+ *
+ * The arrowhead is `cells[cells.length - 1]` and is not stored separately. A
+ * second field naming the head is a second thing that can disagree with the
+ * first, and an arrowhead that disagrees with its path is exactly the bug that
+ * made a prototype arrow point left and then leave upward.
+ */
+export interface PathDef {
+  cells: number[];
+  /** the way it leaves. The last body segment must run along this — see `headAligned`. */
   dir: Dir;
 }
 
@@ -42,74 +60,77 @@ export interface Puzzle {
   difficulty: 1 | 2 | 3;
   w: number;
   h: number;
-  tiles: TileDef[];
-  /** fewest taps that clear the board */
-  par: number;
+  paths: PathDef[];
 }
 
-export const GONE = -1;
-
 /**
- * Position and facing of every arrow. Direction is part of the state now, not
- * just the puzzle, because tapping a blocked arrow turns it.
+ * Which paths are still on the board. Direction is fixed for the life of a
+ * puzzle now, so it lives in the puzzle and not in the state.
  */
 export interface State {
-  readonly pos: readonly number[];
-  readonly dir: readonly Dir[];
+  readonly live: readonly boolean[];
 }
 
 export const cell = (p: Puzzle, x: number, y: number): number => y * p.w + x;
 export const cellX = (p: Puzzle, c: number): number => c % p.w;
 export const cellY = (p: Puzzle, c: number): number => Math.floor(c / p.w);
 
+/** The arrowhead. Always the last cell — see the note on PathDef. */
+export const headCell = (path: PathDef): number => path.cells[path.cells.length - 1] as number;
+
 export function initialState(p: Puzzle): State {
-  return {
-    pos: p.tiles.map((t) => cell(p, t.x, t.y)),
-    dir: p.tiles.map((t) => t.dir),
-  };
+  return { live: p.paths.map(() => true) };
 }
 
+/** Path index per cell, or -1. Paths never overlap, so one pass is enough. */
 export function occupancy(p: Puzzle, state: State): Int16Array {
   const grid = new Int16Array(p.w * p.h).fill(-1);
-  for (let i = 0; i < state.pos.length; i++) {
-    const c = state.pos[i]!;
-    if (c !== GONE) grid[c] = i;
+  for (let i = 0; i < p.paths.length; i++) {
+    if (!state.live[i]) continue;
+    for (const c of (p.paths[i] as PathDef).cells) grid[c] = i;
   }
   return grid;
 }
 
-export interface SlideResult {
-  /** the cell it settles on, GONE if it leaves the board */
-  to: number;
-  /** cells travelled — 0 means blocked, so the tap turns it instead */
-  distance: number;
-}
-
-export function slide(p: Puzzle, state: State, tile: number, grid?: Int16Array): SlideResult {
-  const from = state.pos[tile];
-  if (from === undefined || from === GONE) return { to: GONE, distance: 0 };
+/**
+ * Can this path leave?
+ *
+ * Only the head needs room. The body costs nothing, because it follows exactly
+ * where the head went — every cell the body crosses is one the head has already
+ * vacated. That is why an eighty-per-cent-full board comes apart at all, and it
+ * is the one rule a player has to internalise.
+ */
+export function canGo(p: Puzzle, state: State, index: number, grid?: Int16Array): boolean {
+  const path = p.paths[index];
+  if (!path || !state.live[index]) return false;
 
   const occ = grid ?? occupancy(p, state);
-  const d = state.dir[tile]!;
-  const dx = DX[d]!;
-  const dy = DY[d]!;
-
-  let x = cellX(p, from);
-  let y = cellY(p, from);
-  let travelled = 0;
+  const head = headCell(path);
+  let x = cellX(p, head);
+  let y = cellY(p, head);
+  const dx = DX[path.dir] as number;
+  const dy = DY[path.dir] as number;
 
   for (;;) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx < 0 || nx >= p.w || ny < 0 || ny >= p.h) return { to: GONE, distance: travelled + 1 };
-    if (occ[ny * p.w + nx] !== -1) return { to: cell(p, x, y), distance: travelled };
-    x = nx;
-    y = ny;
-    travelled++;
+    x += dx;
+    y += dy;
+    if (x < 0 || x >= p.w || y < 0 || y >= p.h) return true;
+    const at = occ[y * p.w + x] as number;
+    if (at !== -1 && at !== index) return false;
   }
 }
 
-export type MoveKind = 'slide' | 'exit' | 'turn';
+/** Every path that could leave right now. The hint ladder and the solver share this. */
+export function freePaths(p: Puzzle, state: State): number[] {
+  const occ = occupancy(p, state);
+  const out: number[] = [];
+  for (let i = 0; i < p.paths.length; i++) {
+    if (state.live[i] && canGo(p, state, i, occ)) out.push(i);
+  }
+  return out;
+}
+
+export type MoveKind = 'exit' | 'miss';
 
 export interface MoveResult {
   state: State;
@@ -117,36 +138,64 @@ export interface MoveResult {
 }
 
 /**
- * The one player action. Never returns null: a blocked arrow turns, so every
- * tap on a live arrow does something visible. Nothing to explain, nothing to
- * shake at.
+ * The one player action. A tap on a live path either threads it out or is a
+ * miss — and a miss must be shown, not swallowed. A tap that silently does
+ * nothing teaches nothing, and here the miss is the entire score.
  */
-export function tap(p: Puzzle, state: State, tile: number): MoveResult | null {
-  if (state.pos[tile] === GONE) return null;
-  const result = slide(p, state, tile);
-
-  if (result.distance === 0) {
-    const dir = state.dir.slice();
-    dir[tile] = ((dir[tile]! + 1) % 4) as Dir;
-    return { state: { pos: state.pos, dir }, kind: 'turn' };
-  }
-
-  const pos = state.pos.slice();
-  pos[tile] = result.to;
-  return { state: { pos, dir: state.dir }, kind: result.to === GONE ? 'exit' : 'slide' };
+export function tap(p: Puzzle, state: State, index: number): MoveResult | null {
+  if (!state.live[index]) return null;
+  if (!canGo(p, state, index)) return { state, kind: 'miss' };
+  const live = state.live.slice();
+  live[index] = false;
+  return { state: { live }, kind: 'exit' };
 }
 
-export const isSolved = (state: State): boolean => state.pos.every((c) => c === GONE);
+export const isSolved = (state: State): boolean => state.live.every((v) => !v);
 
 export const cleared = (state: State): number =>
-  state.pos.reduce<number>((n, c) => n + (c === GONE ? 1 : 0), 0);
+  state.live.reduce<number>((n, v) => n + (v ? 0 : 1), 0);
 
-/** Stable key for search memoisation. Position and facing both matter. */
-export const key = (state: State): string => `${state.pos.join(',')}|${state.dir.join('')}`;
+export const liveCount = (state: State): number =>
+  state.live.reduce<number>((n, v) => n + (v ? 1 : 0), 0);
+
+/** Stable key for memoisation. Only liveness varies now, so this is a bitstring. */
+export const key = (state: State): string => state.live.map((v) => (v ? '1' : '0')).join('');
+
+/** Share of the board covered by paths. This is what makes a board look impossible. */
+export function density(p: Puzzle): number {
+  const filled = p.paths.reduce((n, path) => n + path.cells.length, 0);
+  return filled / (p.w * p.h);
+}
 
 /**
- * The floor on par: every arrow must leave, and leaving costs one tap. Any par
- * above this is rotations — i.e. the part of the puzzle that is actually a
- * puzzle.
+ * Does the arrowhead tell the truth?
+ *
+ * The last body segment must run along the exit direction, so the drawn head
+ * points the way the path will actually leave. One arrowhead that lies costs
+ * the player's trust in every arrowhead on the board, so the generator enforces
+ * this and CI refuses any board where it does not hold.
  */
-export const parFloor = (p: Puzzle): number => p.tiles.length;
+export function headAligned(p: Puzzle, path: PathDef): boolean {
+  if (path.cells.length < 2) return true;
+  const head = headCell(path);
+  const before = path.cells[path.cells.length - 2] as number;
+  return (
+    cellX(p, head) - cellX(p, before) === DX[path.dir] &&
+    cellY(p, head) - cellY(p, before) === DY[path.dir]
+  );
+}
+
+/** Cells must be distinct, in bounds, and orthogonally adjacent in order. */
+export function isContiguous(p: Puzzle, path: PathDef): boolean {
+  const seen = new Set<number>();
+  for (let i = 0; i < path.cells.length; i++) {
+    const c = path.cells[i] as number;
+    if (c < 0 || c >= p.w * p.h || seen.has(c)) return false;
+    seen.add(c);
+    if (i === 0) continue;
+    const prev = path.cells[i - 1] as number;
+    const step = Math.abs(cellX(p, c) - cellX(p, prev)) + Math.abs(cellY(p, c) - cellY(p, prev));
+    if (step !== 1) return false;
+  }
+  return path.cells.length > 0;
+}
