@@ -5,6 +5,11 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // The modern transform, so a .tsx file never needs `import React`. Set here
+    // rather than per project because tsx (which runs the build scripts from
+    // the repo root) reads this and would otherwise fall back to the classic
+    // React.createElement transform and fail on any shared component.
+    "jsx": "react-jsx",
     "resolveJsonModule": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,

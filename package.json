@@ -18,10 +18,14 @@
     "dev:twostars": "pnpm --filter @sussed/twostars dev",
     "dev:loop": "pnpm --filter @sussed/loop dev",
     "dev:arrows": "pnpm --filter @sussed/arrows dev",
-    "site": "tsx tools/build-site.ts"
+    "site": "tsx --tsconfig tsconfig.base.json tools/build-site.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }

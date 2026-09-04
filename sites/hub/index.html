@@ -1,0 +1,197 @@
+<!doctype html>
+<!--
+  The studio front door.
+
+  A real file rather than a string inside the build script, because it is a
+  page someone will edit as a page. tools/build-site.ts injects the game cards
+  at the marked slot below and rewrites the base-path token to wherever the
+  site is rooted.
+
+  Both tokens are deliberately not spelled out in this comment: an earlier
+  version mentioned them here, and the build replaced the FIRST match — this
+  comment — leaving the real slot untouched and the placeholder on the page.
+
+  The game marks are NOT written here. They are rendered from the same
+  <GameLogo> the games use, so a mark can never drift between the hub and the
+  game it points at.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SUSSED — small daily puzzles</title>
+    <meta
+      name="description"
+      content="A studio of small daily puzzle games. Free, no ads, no sign-up, works offline."
+    />
+    <meta name="theme-color" content="#f2f0ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+    <meta property="og:title" content="SUSSED — small daily puzzles" />
+    <meta property="og:description" content="You land on the board and you are already playing." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="{{base}}arrows/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style>
+      /* The studio palette, from packages/ui/src/tokens.css. Duplicated here
+         and only here, because the hub ships as a static file with no build
+         step and no bundler to import it through.
+
+         The names have to match tokens.css exactly, not just the values: the
+         game marks are the real <GameLogo>, and it paints itself with
+         var(--s-accent) and var(--s-rule). Rename these and the marks come out
+         half-drawn — which is precisely what happened when they were called
+         --accent and --rule here. */
+      :root {
+        --s-bg: #f2f0ec;
+        --s-surface: #ffffff;
+        --s-ink: #17171a;
+        --s-ink-2: #5f6068;
+        --s-ink-3: #91929b;
+        --s-rule: #d8d5cf;
+        --s-accent: #b4472f;
+        --s-font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+        --s-font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --s-bg: #0e0f12;
+          --s-surface: #17191e;
+          --s-ink: #e9eaee;
+          --s-ink-2: #a0a3ac;
+          --s-ink-3: #6d707a;
+          --s-rule: #292c33;
+          --s-accent: #ec6a4e;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--s-bg);
+        color: var(--s-ink);
+        font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 660px; margin: 0 auto; padding: 56px 20px 72px; }
+
+      h1 {
+        font-family: var(--s-font-display);
+        font-weight: 800;
+        font-size: clamp(38px, 10vw, 60px);
+        letter-spacing: -0.035em;
+        line-height: 1;
+        margin: 0 0 14px;
+      }
+      .standfirst {
+        margin: 0 0 10px;
+        font-size: 18px;
+        color: var(--s-ink-2);
+        max-width: 32ch;
+        text-wrap: balance;
+      }
+      .terms {
+        font-family: var(--s-font-mono);
+        font-size: 11px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: var(--s-ink-3);
+        margin: 0 0 36px;
+      }
+
+      .games { display: grid; gap: 10px; }
+      .game {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        background: var(--s-surface);
+        border: 1px solid var(--s-rule);
+        padding: 16px 18px;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s;
+      }
+      .game:hover,
+      .game:focus-visible { border-color: var(--s-accent); outline: none; }
+
+      /* Each mark inherits its own game's hue through data-game, exactly as it
+         does inside the game itself. */
+      .mark { color: var(--s-accent); flex: none; line-height: 0; }
+      .mark svg { width: 34px; height: 34px; display: block; }
+      .game[data-game='arrows']      { --s-accent: #7a4b96; }
+      .game[data-game='bridges']     { --s-accent: #b4472f; }
+      .game[data-game='starbattle']  { --s-accent: #8a6410; }
+      .game[data-game='slitherlink'] { --s-accent: #33588c; }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) .game[data-game='arrows']      { --s-accent: #b58fd0; }
+        :root:not([data-theme='light']) .game[data-game='bridges']     { --s-accent: #ec6a4e; }
+        :root:not([data-theme='light']) .game[data-game='starbattle']  { --s-accent: #dfb04a; }
+        :root:not([data-theme='light']) .game[data-game='slitherlink'] { --s-accent: #82aede; }
+      }
+
+      .body { display: grid; gap: 2px; min-width: 0; }
+      .name {
+        font-family: var(--s-font-display);
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: -0.015em;
+      }
+      .name em {
+        font-family: var(--s-font-mono);
+        font-style: normal;
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--s-accent);
+        vertical-align: 2px;
+        margin-left: 7px;
+      }
+      .tagline { color: var(--s-ink-2); font-size: 15px; }
+      .rule { color: var(--s-ink-3); font-size: 13.5px; text-wrap: pretty; }
+
+      footer {
+        margin-top: 38px;
+        padding-top: 18px;
+        border-top: 1px solid var(--s-rule);
+        font-size: 14px;
+        color: var(--s-ink-3);
+        display: grid;
+        gap: 6px;
+      }
+      footer .note {
+        font-family: var(--s-font-mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      footer a { color: inherit; }
+      @media (prefers-reduced-motion: reduce) {
+        .game { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>SUSSED</h1>
+      <p class="standfirst">
+        Small daily puzzles. You land on the board and you are already playing.
+      </p>
+      <p class="terms">Free · No ads · No sign-up · Works offline</p>
+
+      <div class="games"><!--GAMES--></div>
+
+      <footer>
+        <div>Nine planned, four playable. A new one when the last one is right.</div>
+        <div class="note">
+          Staging build · each game gets its own domain ·
+          <a href="https://github.com/victorsaly/sussed">source</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
