@@ -21,6 +21,8 @@ import { TWOSTARS_LEVELS, levelPuzzle as twostarsLevel, teachingFor as twostarsT
 import * as loop from '../games/loop/src/engine';
 import { solve as solveLoop } from '../games/loop/src/solver';
 import { LOOP_LEVELS, levelPuzzle as loopLevel, teachingFor as loopTeaching } from '../games/loop/src/levels';
+import { parFloor, type Puzzle as ArrowsPuzzle } from '../games/arrows/src/engine';
+import { solve as solveArrows } from '../games/arrows/src/solver';
 
 interface Bundle<P> {
   epoch: string;
@@ -225,6 +227,67 @@ for (const game of GAMES) {
   }
   failures += bad;
   console.log(`${bad === 0 ? '✓' : '✗'} ${game.slug} course: ${levels.length} teaching levels, each with exactly one answer`);
+}
+
+/* ---- par-based games ----------------------------------------------------
+   Arrows deliberately sits outside the GAMES registry above. That registry
+   verifies one property — exactly one solution — and Arrows has no such
+   property: every board has many solutions and the promise is the PAR, the
+   fewest taps that clear it. A par printed under a board is a promise, and
+   every score built on it inherits the lie if it is wrong, so each shipped
+   puzzle is re-solved from scratch and its par compared. */
+{
+  const file = resolve(process.cwd(), 'games/arrows/public/puzzles.json');
+  let bundle: { puzzles: ArrowsPuzzle[] } | null = null;
+  try {
+    bundle = JSON.parse(readFileSync(file, 'utf8')) as { puzzles: ArrowsPuzzle[] };
+  } catch {
+    console.log('· arrows: no bundle — skipping (run pnpm generate)');
+  }
+
+  if (bundle) {
+    const before = failures;
+    const t0 = Date.now();
+    const seen = new Set<string>();
+
+    for (const puzzle of bundle.puzzles) {
+      const where = `arrows ${puzzle.date} (#${puzzle.number})`;
+      if (seen.has(puzzle.date)) {
+        console.error(`✗ ${where}: duplicate date`);
+        failures++;
+      }
+      seen.add(puzzle.date);
+
+      // Every arrow must leave, and leaving costs a tap, so this floor is
+      // arithmetic. A par below it means something is badly wrong.
+      const floor = parFloor(puzzle);
+      if (puzzle.par < floor) {
+        console.error(`✗ ${where}: par ${puzzle.par} below the floor of ${floor}`);
+        failures++;
+      }
+
+      const report = solveArrows(puzzle);
+      if (report.unrated) {
+        console.error(`✗ ${where}: solver could not prove a par within budget`);
+        failures++;
+      } else if (report.par !== puzzle.par) {
+        console.error(`✗ ${where}: shipped par ${puzzle.par}, solver says ${report.par}`);
+        failures++;
+      }
+
+      // Monday and Tuesday promise a board with nothing in anything's way.
+      if (puzzle.difficulty === 1 && puzzle.par !== floor) {
+        console.error(`✗ ${where}: marked easy but needs ${puzzle.par - floor} rotation(s)`);
+        failures++;
+      }
+    }
+
+    const rotations = bundle.puzzles.reduce((n, p) => n + (p.par - parFloor(p)), 0);
+    console.log(
+      `${failures === before ? '✓' : '✗'} arrows: ${bundle.puzzles.length} pars re-derived in ` +
+        `${((Date.now() - t0) / 1000).toFixed(1)}s · ${rotations} rotations across the set`,
+    );
+  }
 }
 
 if (failures > 0) {
