@@ -8,9 +8,11 @@ import {
   type HintSource,
   type HintStep,
   type HintView,
+  courseSkipped,
+  skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet } from '@sussed/ui';
+import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState } from '@sussed/ui';
 import { share } from '@sussed/share';
 import { buildTopology, cycleEdge, isSolved, progress, type BoardState, type Puzzle } from './engine';
 import { deductionChain, nextDeduction, type Deduction } from './solver';
@@ -75,13 +77,17 @@ export function App() {
   // screen and playable the whole time, and there is no loading state.
   const [sitting, setSitting] = useState<Sitting>(() => levelSitting(LEVELS[0]!));
   const [resolved, setResolved] = useState(false);
+  const [solvedLevels, setSolvedLevels] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     let alive = true;
     void player.progress(BRIDGES_LEVELS).then((progress) => {
       if (!alive) return;
       const next = LEVELS.find((l) => !progress.solved.has(l.id));
-      setSitting(next ? levelSitting(next) : dailySitting());
+      setSolvedLevels(progress.solved);
+      // Someone who has said they already know the game goes straight to the
+      // daily; the course is still there, one tap away, for when they want it.
+      setSitting(courseSkipped(GAME) || !next ? dailySitting() : levelSitting(next));
       setResolved(true);
     });
     return () => {
@@ -238,6 +244,9 @@ export function App() {
         hints: hints.used,
         difficulty: puzzle.difficulty,
       });
+      if (sitting.mode === 'level') {
+        setSolvedLevels((prev) => new Set(prev).add(sitting.puzzleId));
+      }
       if (!claimDismissed) {
         const offer = await player.claimOffer({ ms });
         if (offer) setClaim(offer);
@@ -250,6 +259,24 @@ export function App() {
     const next = i >= 0 ? LEVELS[i + 1] : undefined;
     setSitting(next ? levelSitting(next) : dailySitting());
   }, [sitting.puzzleId]);
+
+  /** Back to a level already cleared — the dots are the only way in. */
+  const goToLevel = useCallback((index: number) => {
+    const ref = LEVELS[index];
+    if (ref) setSitting(levelSitting(ref));
+  }, []);
+
+  /** Straight to today's board, and it stays that way on this device. */
+  const goToDaily = useCallback(() => {
+    skipCourse(GAME);
+    setSitting(dailySitting());
+  }, []);
+
+  /** Back into the course, at the first level not yet cleared. */
+  const goToCourse = useCallback(() => {
+    const next = LEVELS.find((l) => !solvedLevels.has(l.id)) ?? LEVELS[0];
+    if (next) setSitting(levelSitting(next));
+  }, [solvedLevels]);
 
   const onShare = async (): Promise<void> => {
     const result = await share({
@@ -323,7 +350,30 @@ export function App() {
         </button>
       </header>
 
+      {sitting.mode === 'level' && (
+        <CourseDots
+          states={LEVELS.map((l): DotState =>
+            l.id === sitting.puzzleId ? 'here' : solvedLevels.has(l.id) ? 'done' : 'todo',
+          )}
+          label={`Level ${(sitting.levelIndex ?? 0) + 1} of ${LEVELS.length}`}
+          onPick={goToLevel}
+        />
+      )}
+
       {sitting.teaches && <p className="teach">{sitting.teaches}</p>}
+
+      {/* One way past the course, and one way back into it. Both stay out of
+          the way: the board is what you came for. */}
+      {sitting.mode === 'level' ? (
+        <button className="s-quiet" onClick={goToDaily}>
+          Played before? Go straight to today&rsquo;s puzzle
+        </button>
+      ) : solvedLevels.size < LEVELS.length ? (
+        <button className="s-quiet" onClick={goToCourse}>
+          Back to the course
+        </button>
+      ) : null}
+
 
       <main style={{ display: 'grid', placeItems: 'center', flex: 1 }}>
         <Board

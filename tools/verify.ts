@@ -206,9 +206,23 @@ for (const game of GAMES) {
   );
 }
 
-/* ---- the teaching courses ----------------------------------------------
-   A course level with two answers, or one that needs a guess, teaches the
-   wrong lesson at exactly the moment a player is deciding whether to stay. */
+/* ---- the courses -------------------------------------------------------
+   A course has two halves and they are held to different standards.
+
+   The TEACHING chapters introduce one rule each. They must be small enough
+   that the rule is the only thing happening, and solvable by pure deduction —
+   a board that needs a guess teaches the wrong lesson at exactly the moment
+   someone is deciding whether to stay.
+
+   The LADDER rungs teach nothing; they are the graded run that follows, and
+   they are full-sized puzzles on purpose. The one thing they must not do is
+   lie about their difficulty: a rung marked 1 makes the same promise a Monday
+   daily does, so it has to be solvable without guessing. Harder rungs may need
+   a look-ahead, which is what makes them harder.
+
+   Both halves must have exactly one answer. That never bends. */
+const isLadder = (ref: { chapter: string }): boolean => ref.chapter.startsWith('ladder-');
+
 for (const game of GAMES) {
   const levels = allLevels(game.levels);
   let bad = 0;
@@ -220,24 +234,37 @@ for (const game of GAMES) {
       continue;
     }
     if (!game.teachingFor(ref.id)) {
-      console.error(`✗ ${game.slug} course ${ref.id}: no rule declared — every chapter must teach exactly one`);
+      console.error(`✗ ${game.slug} course ${ref.id}: no words declared — every chapter needs a title and a line`);
       bad++;
     }
+
+    const ladder = isLadder(ref);
     const report = game.solve(puzzle);
+
     if (report.count !== 1) {
       console.error(`✗ ${game.slug} course ${ref.id}: ${report.count === 0 ? 'no solution' : 'more than one solution'}`);
       bad++;
-    } else if (game.courseMustBeLogic && !report.logicOnly) {
-      console.error(`✗ ${game.slug} course ${ref.id}: needs a guess — a teaching board must be pure deduction`);
-      bad++;
+    } else if (!report.logicOnly) {
+      if (ladder && ref.difficulty === 1) {
+        console.error(`✗ ${game.slug} course ${ref.id}: marked easy but needs a guess`);
+        bad++;
+      } else if (!ladder && game.courseMustBeLogic) {
+        console.error(`✗ ${game.slug} course ${ref.id}: needs a guess — a teaching board must be pure deduction`);
+        bad++;
+      }
     }
-    if (game.size(puzzle) > game.maxTeachingSize) {
+
+    if (!ladder && game.size(puzzle) > game.maxTeachingSize) {
       console.error(`✗ ${game.slug} course ${ref.id}: too big — a teaching board should show one rule, not a puzzle`);
       bad++;
     }
   }
   failures += bad;
-  console.log(`${bad === 0 ? '✓' : '✗'} ${game.slug} course: ${levels.length} teaching levels, each with exactly one answer`);
+  const rungs = levels.filter(isLadder).length;
+  console.log(
+    `${bad === 0 ? '✓' : '✗'} ${game.slug} course: ${levels.length - rungs} teaching + ${rungs} ladder, ` +
+      `each with exactly one answer`,
+  );
 }
 
 /* ---- Arrows -------------------------------------------------------------
@@ -352,7 +379,7 @@ for (const game of GAMES) {
         );
         failures++;
       }
-      if (puzzle.paths.length > 10) {
+      if (!ref.chapter.startsWith('ladder-') && puzzle.paths.length > 10) {
         console.error(`✗ ${where}: too big — a teaching board should show one rule, not a puzzle`);
         failures++;
       }

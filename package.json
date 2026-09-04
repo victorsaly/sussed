@@ -18,7 +18,8 @@
     "dev:twostars": "pnpm --filter @sussed/twostars dev",
     "dev:loop": "pnpm --filter @sussed/loop dev",
     "dev:arrows": "pnpm --filter @sussed/arrows dev",
-    "site": "tsx --tsconfig tsconfig.base.json tools/build-site.ts"
+    "site": "tsx --tsconfig tsconfig.base.json tools/build-site.ts",
+    "ladder": "tsx --tsconfig tsconfig.base.json tools/build-ladder.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

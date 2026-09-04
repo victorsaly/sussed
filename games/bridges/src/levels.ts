@@ -11,6 +11,7 @@
  */
 
 import { buildLevelSet, type LevelSet } from '@sussed/core';
+import { LADDER } from './ladder';
 import type { IslandDef, Puzzle } from './engine';
 
 interface Teaching {
@@ -91,34 +92,67 @@ export const TEACHING: Teaching[] = [
   },
 ];
 
-export const BRIDGES_LEVELS: LevelSet = buildLevelSet(
-  'bridges',
-  TEACHING.map((t) => ({
+/**
+ * The course: the teaching chapters, then the ladder.
+ *
+ * The teaching boards introduce one rule each and stop. The ladder carries on
+ * from there, gentle to hard, so difficulty is how far you have got rather
+ * than a menu in front of the board. It also takes every course past the ten
+ * levels the daily waits for — three of the four games used to promise that
+ * and then run out at five.
+ */
+export const BRIDGES_LEVELS: LevelSet = buildLevelSet('bridges', [
+  ...TEACHING.map((t) => ({
     id: t.chapter,
     title: t.title,
     teaches: t.teaches,
     levels: [{ difficulty: 1 as const }],
   })),
-);
+  ...LADDER.map((r) => ({
+    id: r.chapter,
+    title: r.title,
+    teaches: r.teaches,
+    levels: [{ difficulty: r.difficulty }],
+  })),
+]);
 
 /** Level ids are stable and appear in player records — never renumber them. */
 export function levelPuzzle(levelId: string): Puzzle | null {
   const chapter = levelId.replace(/-\d+$/, '');
+  const base = { id: `bridges-${levelId}`, game: 'bridges' as const, date: '', number: 0 };
+
   const t = TEACHING.find((x) => x.chapter === chapter);
-  if (!t) return null;
-  return {
-    id: `bridges-${levelId}`,
-    game: 'bridges',
-    date: '',
-    number: 0,
-    difficulty: 1,
+  if (t) {
+    return {
+      ...base,
+      difficulty: 1,
     w: t.w,
     h: t.h,
     islands: t.islands,
-  };
+    };
+  }
+
+  const rung = LADDER.find((x) => x.chapter === chapter);
+  if (rung) return { ...base, difficulty: rung.difficulty, ...rung.board };
+
+  return null;
 }
 
-export function teachingFor(levelId: string): Teaching | null {
+/**
+ * The chapter's words. Narrower than `Teaching` on purpose: a ladder rung has
+ * a title and a line of its own but no board of its own shape, and callers
+ * only ever want what to say.
+ */
+export interface ChapterText {
+  chapter: string;
+  title: string;
+  teaches: string;
+}
+
+export function teachingFor(levelId: string): ChapterText | null {
   const chapter = levelId.replace(/-\d+$/, '');
-  return TEACHING.find((x) => x.chapter === chapter) ?? null;
+  const t = TEACHING.find((x) => x.chapter === chapter);
+  if (t) return { chapter: t.chapter, title: t.title, teaches: t.teaches };
+  const rung = LADDER.find((x) => x.chapter === chapter);
+  return rung ? { chapter: rung.chapter, title: rung.title, teaches: rung.teaches } : null;
 }

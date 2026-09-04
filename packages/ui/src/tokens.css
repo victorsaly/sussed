@@ -431,21 +431,46 @@ button {
   gap: 5px;
   padding: 0 0 8px;
 }
-.s-dots i {
+.s-dots i,
+.s-dots button {
   height: 4px;
   flex: 1;
   border-radius: 2px;
   background: var(--s-rule);
   transition: background 0.25s;
+  border: 0;
+  padding: 0;
+  min-height: 0;
 }
-.s-dots i.is-done {
+.s-dots button {
+  /* A 4px target is not a target. The bar stays 4px; the hit area is 22px of
+     transparent padding around it, which is what a thumb actually needs. */
+  position: relative;
+  cursor: pointer;
+}
+.s-dots button:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: -11px -2px;
+}
+.s-dots button:disabled {
+  cursor: default;
+}
+.s-dots button:focus-visible {
+  outline: 2px solid var(--s-accent);
+  outline-offset: 3px;
+}
+.s-dots i.is-done,
+.s-dots button.is-done {
   background: var(--s-good);
 }
-.s-dots i.is-here {
+.s-dots i.is-here,
+.s-dots button.is-here {
   background: var(--s-accent);
 }
 @media (prefers-reduced-motion: reduce) {
-  .s-dots i {
+  .s-dots i,
+  .s-dots button {
     transition: none;
   }
 }
@@ -481,4 +506,32 @@ button {
   color: var(--s-ink-2);
   margin-top: 4px;
   text-wrap: balance;
+}
+
+/* ---- the quiet way out -------------------------------------------------
+   Two links, both one line of small type under the header: past the course
+   for someone who already knows the game, and back into it for someone who
+   went past and changed their mind. Deliberately plain — a button here would
+   compete with the board, and neither is the thing you came to do. */
+
+.s-quiet {
+  display: block;
+  margin: 0 0 8px;
+  padding: 4px 0;
+  min-height: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--s-ink-3);
+  text-align: center;
+  width: 100%;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--s-rule);
+}
+.s-quiet:hover,
+.s-quiet:focus-visible {
+  color: var(--s-accent);
+  text-decoration-color: currentColor;
 }

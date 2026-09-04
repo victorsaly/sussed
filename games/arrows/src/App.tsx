@@ -7,6 +7,8 @@ import {
   hintBudget,
   type HintSource,
   type HintView,
+  courseSkipped,
+  skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
 import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState } from '@sussed/ui';
@@ -300,6 +302,9 @@ export function App() {
       if (sitting.mode === 'level') {
         setSolvedLevels((prev) => new Set(prev).add(sitting.puzzleId));
       }
+      if (sitting.mode === 'level') {
+        setSolvedLevels((prev) => new Set(prev).add(sitting.puzzleId));
+      }
       if (!claimDismissed) {
         const offer = await player.claimOffer({ ms });
         if (offer) setClaim(offer);
@@ -323,6 +328,24 @@ export function App() {
     const next = i >= 0 ? LEVELS[i + 1] : undefined;
     setSitting(next ? levelSitting(next) : dailySitting());
   }, [sitting.puzzleId]);
+
+  /** Back to a level already cleared — the dots are the only way in. */
+  const goToLevel = useCallback((index: number) => {
+    const ref = LEVELS[index];
+    if (ref) setSitting(levelSitting(ref));
+  }, []);
+
+  /** Straight to today's board, and it stays that way on this device. */
+  const goToDaily = useCallback(() => {
+    skipCourse(GAME);
+    setSitting(dailySitting());
+  }, []);
+
+  /** Back into the course, at the first level not yet cleared. */
+  const goToCourse = useCallback(() => {
+    const next = LEVELS.find((l) => !solvedLevels.has(l.id)) ?? LEVELS[0];
+    if (next) setSitting(levelSitting(next));
+  }, [solvedLevels]);
 
   const onShare = async (): Promise<void> => {
     const result = await share({
@@ -429,10 +452,24 @@ export function App() {
             l.id === sitting.puzzleId ? 'here' : solvedLevels.has(l.id) ? 'done' : 'todo',
           )}
           label={`Level ${(sitting.levelIndex ?? 0) + 1} of ${LEVELS.length}`}
+          onPick={goToLevel}
         />
       )}
 
       {sitting.teaches && <p className="teach">{sitting.teaches}</p>}
+
+      {/* One way past the course, and one way back into it. Both stay out of
+          the way: the board is what you came for. */}
+      {sitting.mode === 'level' ? (
+        <button className="s-quiet" onClick={goToDaily}>
+          Played before? Go straight to today&rsquo;s puzzle
+        </button>
+      ) : solvedLevels.size < LEVELS.length ? (
+        <button className="s-quiet" onClick={goToCourse}>
+          Back to the course
+        </button>
+      ) : null}
+
 
       <main style={{ display: 'grid', placeItems: 'center', flex: 1, minHeight: 0 }}>
         <Board

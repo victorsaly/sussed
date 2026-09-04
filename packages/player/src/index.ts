@@ -26,6 +26,7 @@ import type { GameStats, Identity, LeaderboardEntry, PlayerStorage } from './typ
 export * from './types';
 export * from './stats';
 export * from './hints';
+export * from './prefs';
 export { PlayersClient, ServiceError } from './client';
 
 export interface PlayerOptions extends ClientOptions {
