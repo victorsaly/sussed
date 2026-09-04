@@ -161,6 +161,18 @@ export function generatePuzzle(
     const mustBeLogic = wanted < 3;
     const maxGuesses = mustBeLogic ? 0 : MAX_WEEKEND_GUESSES;
     const order = rng.shuffle([...Array(w * h).keys()]);
+    /* buildTopology() is called fresh on every iteration, and reusing the
+       `topo` above instead looks obviously right — the edge graph depends only
+       on w and h, and neither changes here. It is wrong, and quietly so: a
+       Topology also carries `clued`, the list of cells that currently have a
+       clue. Hand the solver a stale one and it keeps counting clues that have
+       just been removed, so every removal looks safe, the board empties, and
+       the final solve on an under-constrained grid runs for minutes.
+
+       Refreshing only `clued` is correct — it was tried, and produced a
+       byte-identical bundle — but it is not worth the code: it saved no
+       measurable time, because the solver dominates this loop completely and
+       the topology rebuild is noise beside it. */
     for (const c of order) {
       const keep = puzzle.clues[c]!;
       puzzle.clues[c] = -1;
