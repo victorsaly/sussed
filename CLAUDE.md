@@ -66,6 +66,18 @@ turns it 90°, so a wrong turn costs a tap. Note what the fix preserves — no
 board can become unsolvable, because an arrow can always be turned back. Aim
 for that shape: a real cost to think about, and no way to be stranded.
 
+The story has a third act, decided 2026-09-04. Rotation fixed the measurement,
+but the phone test that followed found the game: **paths, not tiles**. Each
+arrowhead now leads a multi-cell path that threads out of the board head
+first, and it can leave only when the straight run from its head is clear.
+Tapping a blocked path costs a miss. This accepts confluence instead of
+fighting it — order never matters, greedy always clears — because on a board
+80% full the puzzle moved: the work is *seeing* which head is free. The cost
+spent badly is the miss; the no-stranding guarantee is the generator's reverse
+construction, which only lays a path on cells whose exit ray is clear at
+placement, so the board always comes apart. The tap-to-turn engine stays in
+git history if a planning game is ever wanted.
+
 
 ## Architecture, in one paragraph
 
@@ -109,6 +121,17 @@ difficulty. Never remove the ✗ notation — without a way to record "definitel
 not here", every ruled-out move has to live in the player's head, which is
 where people give up on a board they could otherwise solve.
 
+**The ladder ends in a flip.** Once the budget is spent, the board offers to
+turn over and show the solution — a rung five, for the player who is stuck
+past helping, not a button that sits next to a fresh board. Per game, the
+`HintSource` supplies what "the solution" looks like: a deduction board flips
+to its solved grid; a spatial game plays its solution as a replay off the move
+stack, because its solved state is an empty board and a flip to nothing
+teaches nothing. Two rules keep the flip honest. On a level, the player flips
+back and still plays the moves themselves — the completion is a real result,
+so progression stays derived. On a daily, flipping ends the attempt: revealed
+is never recorded as solved.
+
 ## The three identity tiers
 
 1. **anonymous** — device id made locally on first load. Everything works.
@@ -125,6 +148,10 @@ where people give up on a board they could otherwise solve.
 - **A generated puzzle has exactly one solution.** `pnpm verify` re-solves every
   shipped puzzle from scratch and CI fails if any is ambiguous. The generator
   does not get to mark its own homework.
+- **Revealed is not solved.** The flip that shows a stuck player the answer
+  never writes a solve. A revealed daily ends unrecorded; a revealed level
+  still has to be played through. Streaks, stats and the share card only ever
+  see real solves.
 - **Monday and Tuesday puzzles are solvable by pure deduction**, never guessing.
 - **A solved result is immutable.** This is why sync is a set merge rather than
   conflict resolution. Guarded in `store.ts` and in the SQL upsert.
