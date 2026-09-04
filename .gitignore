@@ -8,3 +8,6 @@ dist/
 .env
 .env.local
 _to_delete/
+
+# Built by tools/build-site.ts for GitHub Pages.
+_site/

@@ -6,10 +6,16 @@
  * something useful; a first-time visitor is being interrupted.
  */
 
+/**
+ * `url` should come from the game's own base — `${import.meta.env.BASE_URL}sw.js` —
+ * so a game staged under a sub-path registers its own worker and not the one
+ * belonging to whatever sits at the domain root.
+ */
 export function registerServiceWorker(url = '/sw.js'): void {
   if (!('serviceWorker' in navigator)) return;
+  const scope = url.replace(/[^/]*$/, '');
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register(url).catch(() => undefined);
+    void navigator.serviceWorker.register(url, { scope }).catch(() => undefined);
   });
 }
 
@@ -63,15 +69,16 @@ export function buildManifest(input: ManifestInput): string {
       name: input.name,
       short_name: input.shortName,
       description: input.description,
-      start_url: input.startUrl ?? '/',
+      start_url: input.startUrl ?? './',
+      scope: './',
       display: 'standalone',
       orientation: 'portrait',
       theme_color: input.themeColor,
       background_color: input.backgroundColor,
       icons: [
-        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-        { src: '/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: './icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: './icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: './icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
     null,

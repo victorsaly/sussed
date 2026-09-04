@@ -129,6 +129,15 @@ export interface BoardProps {
   chain: number[];
   /** a path just tapped that could not go — shakes, then clears */
   miss: number | null;
+  /**
+   * Draw the whole board faded and untappable, however much of it has left.
+   *
+   * This is what a finished Arrows board looks like. Clearing it empties it, so
+   * the honest picture of a win is a grid of nothing — which tells the player
+   * neither that they finished nor what they finished. Redrawing the opening
+   * position, greyed, gives the solve something to have been about.
+   */
+  ghost?: boolean;
 }
 
 export function Board({
@@ -140,6 +149,7 @@ export function Board({
   look,
   chain,
   miss,
+  ghost = false,
 }: BoardProps) {
   // How far the leaving path has threaded, in route units. Kept in state so the
   // drawing stays a function of the data even mid-animation.
@@ -170,28 +180,52 @@ export function Board({
 
     const duration = exitMs(path);
     const started = performance.now();
+    let finished = false;
+    const settle = (): void => {
+      if (finished) return;
+      finished = true;
+      done.current();
+    };
+
     const step = (now: number): void => {
       const t = Math.min(1, (now - started) / duration);
       // Smoothstep, so it threads rather than jerks.
       setTravelled(total * t * t * (3 - 2 * t));
       if (t < 1) frame.current = requestAnimationFrame(step);
-      else done.current();
+      else settle();
     };
     frame.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame.current);
+
+    /* The backstop, and it is not paranoia.
+     *
+     * Taps are refused while a path is on its way out, and the only thing that
+     * lifts that is this animation finishing. requestAnimationFrame does not
+     * run in a backgrounded tab — so switching away mid-exit and coming back
+     * would leave the board permanently untappable, with nothing on screen to
+     * say why. A timer that cannot be starved ends the move regardless; if the
+     * frames never came, nobody was watching the animation anyway. */
+    const backstop = setTimeout(settle, duration + 500);
+
+    return () => {
+      cancelAnimationFrame(frame.current);
+      clearTimeout(backstop);
+    };
   }, [exiting, puzzle]);
 
   const width = PAD * 2 + (puzzle.w - 1) * CELL;
   const height = PAD * 2 + (puzzle.h - 1) * CELL;
   const order = new Map(chain.map((index, i) => [index, i + 1]));
   const live = state.live.filter(Boolean).length;
+  const label = ghost
+    ? `${puzzle.w} by ${puzzle.h} board, cleared`
+    : `${puzzle.w} by ${puzzle.h} board, ${live} path${live === 1 ? '' : 's'} left`;
 
   return (
     <svg
       className="maze"
       viewBox={`0 0 ${width} ${height}`}
       role="group"
-      aria-label={`${puzzle.w} by ${puzzle.h} board, ${live} path${live === 1 ? '' : 's'} left`}
+      aria-label={label}
     >
       {Array.from({ length: puzzle.h }, (_, y) =>
         Array.from({ length: puzzle.w }, (_, x) => (
@@ -206,7 +240,7 @@ export function Board({
       )}
 
       {puzzle.paths.map((path, i) => {
-        if (!state.live[i] && exiting !== i) return null;
+        if (!ghost && !state.live[i] && exiting !== i) return null;
 
         const pts = routePoints(puzzle, path);
         const d = toD(pts);
@@ -228,6 +262,7 @@ export function Board({
         const badge = order.get(i);
         const classes = [
           'path',
+          ghost ? 'is-ghost' : '',
           look === i ? 'is-look' : '',
           miss === i ? 'is-miss' : '',
           badge ? 'is-chain' : '',
@@ -256,15 +291,17 @@ export function Board({
             )}
             {/* A fat invisible copy of the route. The visible stroke is 11 units
                 wide; a thumb needs about 70. */}
-            <path
-              className="path-hit"
-              d={d}
-              strokeWidth={CELL * 0.7}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onTap(i);
-              }}
-            />
+            {!ghost && (
+              <path
+                className="path-hit"
+                d={d}
+                strokeWidth={CELL * 0.7}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onTap(i);
+                }}
+              />
+            )}
           </g>
         );
       })}

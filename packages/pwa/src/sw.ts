@@ -10,10 +10,19 @@
 
 declare const self: ServiceWorkerGlobalScope;
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `sussed-shell-${VERSION}`;
 
-const PRECACHE = ['/', '/index.html', '/puzzles.json', '/manifest.webmanifest'];
+/**
+ * Relative, because the worker is not always at a domain root.
+ *
+ * Each game gets its own keyword domain eventually, but until then they are
+ * staged side by side under one host — sussed.games/arrows/ and so on — and an
+ * absolute '/index.html' there precaches the hub instead of the game, or 404s.
+ * Relative URLs resolve against the worker's own location, which is the game's
+ * root in both arrangements.
+ */
+const PRECACHE = ['./', './index.html', './puzzles.json', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

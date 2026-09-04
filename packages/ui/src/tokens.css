@@ -421,3 +421,64 @@ button {
   border-radius: 999px;
   z-index: 40;
 }
+
+/* ---- course progress ---------------------------------------------------
+   The shape of how far you are through the teaching. Sits under the header,
+   above the board, and disappears entirely once the course is done. */
+
+.s-dots {
+  display: flex;
+  gap: 5px;
+  padding: 0 0 8px;
+}
+.s-dots i {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: var(--s-rule);
+  transition: background 0.25s;
+}
+.s-dots i.is-done {
+  background: var(--s-good);
+}
+.s-dots i.is-here {
+  background: var(--s-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .s-dots i {
+    transition: none;
+  }
+}
+
+/* ---- the finished board ------------------------------------------------
+   Arrows clears to an empty grid, so on a solve the board is redrawn as it
+   started, faded and untappable. You get to see what you just took apart
+   instead of staring at nothing. */
+
+.s-done {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+  padding: 10px 0 2px;
+}
+.s-done .headline {
+  font-family: var(--s-font-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--s-accent);
+}
+.s-done .detail {
+  font-family: var(--s-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--s-ink-3);
+  text-transform: uppercase;
+}
+.s-done .aside {
+  font-size: 14px;
+  color: var(--s-ink-2);
+  margin-top: 4px;
+  text-wrap: balance;
+}

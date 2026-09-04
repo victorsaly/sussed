@@ -1,0 +1,79 @@
+## Staging on GitHub Pages.
+##
+## Not the plan — the plan is a keyword domain per game with the studio hub at
+## sussed.games. But a game nobody can open is a game nobody can test, and this
+## costs nothing and needs no DNS, so every push to main puts the hub and all
+## four games somewhere a phone can reach them.
+##
+## The puzzle gate runs first and the deploy is downstream of it: a board that
+## cannot be cleared, or an arrowhead that lies about where its path leaves,
+## fails here exactly as it does in CI. Nothing ships past a red verify.
+##
+## One-time setup in the repo: Settings → Pages → Source → GitHub Actions.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow the deploy to publish, and let a newer push supersede an in-flight one.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Regenerated here rather than trusted from the repo, so a change to a
+      # generator can never quietly ship worse puzzles.
+      - name: Generate a year of puzzles
+        run: pnpm generate
+
+      - name: Verify every puzzle
+        run: pnpm verify
+
+      # A project page lives at /<repo>/, so every game is built for its own
+      # sub-path under that. On a custom domain this becomes SITE_BASE=/.
+      - name: Build the site
+        run: pnpm site
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

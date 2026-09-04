@@ -2,7 +2,7 @@
   "name": "sussed",
   "private": true,
   "version": "0.1.0",
-  "description": "SUSSED — a studio of small, quiet daily puzzle games.",
+  "description": "SUSSED \u2014 a studio of small, quiet daily puzzle games.",
   "packageManager": "pnpm@9.12.3",
   "engines": {
     "node": ">=20"
@@ -17,7 +17,8 @@
     "test": "tsx tools/levels.test.ts && tsx tools/hints.test.ts",
     "dev:twostars": "pnpm --filter @sussed/twostars dev",
     "dev:loop": "pnpm --filter @sussed/loop dev",
-    "dev:arrows": "pnpm --filter @sussed/arrows dev"
+    "dev:arrows": "pnpm --filter @sussed/arrows dev",
+    "site": "tsx tools/build-site.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

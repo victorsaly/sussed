@@ -9,7 +9,7 @@ import {
   type HintView,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet } from '@sussed/ui';
+import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState } from '@sussed/ui';
 import { share } from '@sussed/share';
 import { initialState, isSolved, liveCount, tap, type Puzzle, type State } from './engine';
 import { createHintSource } from './hints';
@@ -70,12 +70,14 @@ export function App() {
   // is on screen and playable throughout, and there is no loading state.
   const [sitting, setSitting] = useState<Sitting>(() => levelSitting(LEVELS[0]!));
   const [resolved, setResolved] = useState(false);
+  const [solvedLevels, setSolvedLevels] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     let alive = true;
     void player.progress(ARROWS_LEVELS).then((progress) => {
       if (!alive) return;
       const next = LEVELS.find((l) => !progress.solved.has(l.id));
+      setSolvedLevels(progress.solved);
       setSitting(next ? levelSitting(next) : dailySitting());
       setResolved(true);
     });
@@ -113,6 +115,9 @@ export function App() {
 
   const solved = useMemo(() => isSolved(state), [state]);
   const left = liveCount(state);
+  // Not while the last path is still threading out — the ghost board appearing
+  // mid-animation would cut the one moment the game is worth watching.
+  const finished = solved && exiting === null && !replaying;
 
   // Fresh board, fresh everything.
   useEffect(() => {
@@ -292,6 +297,9 @@ export function App() {
         setRevealNote('Revealed. Nothing recorded today — the next one is tomorrow.');
         return;
       }
+      if (sitting.mode === 'level') {
+        setSolvedLevels((prev) => new Set(prev).add(sitting.puzzleId));
+      }
       if (!claimDismissed) {
         const offer = await player.claimOffer({ ms });
         if (offer) setClaim(offer);
@@ -349,6 +357,46 @@ export function App() {
 
   const revealedThis = hints.revealed;
 
+  /* What the finished board says. A cleared Arrows board is empty, so this is
+     the only thing telling the player what just happened — it says what they
+     did, not "well done". */
+  const byReveal = revealedThis && sitting.mode === 'daily';
+  const levelNumber = (sitting.levelIndex ?? 0) + 1;
+
+  const doneHeadline = byReveal
+    ? 'Revealed'
+    : sitting.mode === 'level'
+      ? levelNumber === LEVELS.length
+        ? 'Course complete'
+        : `Level ${levelNumber} cleared`
+      : misses === 0
+        ? 'Cleared, no misses'
+        : 'Cleared';
+
+  const doneDetail = [
+    `${puzzle.paths.length} paths`,
+    formatMs(stack.current.elapsedMs),
+    misses === 0 ? 'no misses' : `${misses} miss${misses === 1 ? '' : 'es'}`,
+    hints.used > 0 ? `${hints.used} nudge${hints.used === 1 ? '' : 's'}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const doneAside = ((): string | null => {
+    if (byReveal) return 'Nothing recorded today. The next one is tomorrow.';
+    if (sitting.mode === 'daily') {
+      const streak = stats?.streak.current ?? 0;
+      return streak > 1
+        ? `That is ${streak} days in a row.`
+        : 'A new board tomorrow.';
+    }
+    if (levelNumber === LEVELS.length) {
+      return 'That is the course. The daily is open now — a new board every day.';
+    }
+    if (levelNumber >= 10) return 'The daily is open now.';
+    return `${LEVELS.length - levelNumber} to go before the daily opens.`;
+  })();
+
   return (
     <div className="s-shell">
       <header className="s-bar">
@@ -375,22 +423,40 @@ export function App() {
         </button>
       </header>
 
+      {sitting.mode === 'level' && (
+        <CourseDots
+          states={LEVELS.map((l): DotState =>
+            l.id === sitting.puzzleId ? 'here' : solvedLevels.has(l.id) ? 'done' : 'todo',
+          )}
+          label={`Level ${(sitting.levelIndex ?? 0) + 1} of ${LEVELS.length}`}
+        />
+      )}
+
       {sitting.teaches && <p className="teach">{sitting.teaches}</p>}
 
       <main style={{ display: 'grid', placeItems: 'center', flex: 1, minHeight: 0 }}>
         <Board
           puzzle={puzzle}
-          state={state}
+          state={finished ? initialState(puzzle) : state}
           exiting={exiting}
           onExitDone={onExitDone}
           onTap={onTap}
           look={hints.focus as number | null}
           chain={chain}
           miss={miss}
+          ghost={finished}
         />
       </main>
 
-      {!solved && (
+      {finished && (
+        <div className="s-done">
+          <div className="headline">{doneHeadline}</div>
+          <div className="detail">{doneDetail}</div>
+          {doneAside && <p className="aside">{doneAside}</p>}
+        </div>
+      )}
+
+      {!finished && (
         <p className="progress-line" aria-live="polite">
           {left} path{left === 1 ? '' : 's'} left
           {misses > 0 ? ` · ${misses} miss${misses === 1 ? '' : 'es'}` : ''}
@@ -402,22 +468,14 @@ export function App() {
       </p>
 
       <footer className="s-bar">
-        {solved ? (
+        {finished ? (
           <>
-            <div>
-              <div className="s-title" style={{ color: 'var(--s-accent)' }}>
-                {revealedThis && sitting.mode === 'daily' ? 'Revealed' : 'Cleared'}
-              </div>
-              <div className="s-sub">
-                {formatMs(stack.current.elapsedMs)} ·{' '}
-                {misses === 0 ? 'no misses' : `${misses} miss${misses === 1 ? '' : 'es'}`}
-                {hints.used > 0 ? ` · ${hints.used} nudge${hints.used > 1 ? 's' : ''}` : ''}
-              </div>
-            </div>
+            {/* The panel above already says what happened, so this is only the
+                way onward. Saying it twice made the win read as boilerplate. */}
             <span className="s-spacer" />
             {sitting.mode === 'level' ? (
               <button className="s-btn s-btn-primary" onClick={advance}>
-                Next →
+                {levelNumber === LEVELS.length ? 'Play the daily →' : 'Next level →'}
               </button>
             ) : (
               !revealedThis && (

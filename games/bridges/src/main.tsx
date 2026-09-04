@@ -27,4 +27,4 @@ createRoot(root).render(
   </StrictMode>,
 );
 
-registerServiceWorker();
+registerServiceWorker(`${import.meta.env.BASE_URL}sw.js`);

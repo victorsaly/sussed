@@ -115,3 +115,12 @@
     opacity: 0.6;
   }
 }
+
+/* The finished board: the opening position, faded, so a win is something you
+   can look at rather than an empty grid. */
+.path.is-ghost .path-body {
+  opacity: 0.3;
+}
+.path.is-ghost .path-head {
+  opacity: 0.45;
+}
