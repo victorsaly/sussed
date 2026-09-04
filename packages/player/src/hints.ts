@@ -37,6 +37,22 @@ export interface HintStep<TMove = unknown> {
   label?: string;
 }
 
+/**
+ * How a game shows its answer when the ladder has run out and the player is
+ * still stuck.
+ *
+ * Two shapes, because a solved board is not always a picture. A deduction game
+ * has an answer you can look at — the filled grid IS the reveal. A spatial game
+ * ends with an EMPTY board, so flipping to its solved state shows nothing at
+ * all; there, the answer is the sequence, and the move stack built for undo is
+ * already a replay system.
+ */
+export type Revelation<TMove = unknown> =
+  /** the finished board, for a game whose answer is a picture */
+  | { kind: 'solved'; board: unknown }
+  /** the solve played back, for a game whose answer is an order */
+  | { kind: 'replay'; moves: TMove[] };
+
 export interface HintSource<TMove = unknown> {
   /** the single next forced move, or null when nothing is forced */
   next(): HintStep<TMove> | null;
@@ -44,6 +60,11 @@ export interface HintSource<TMove = unknown> {
   chain(max: number): HintStep<TMove>[];
   /** how to name the focus in a sentence, e.g. "the 4" */
   describeFocus(focus: unknown): string;
+  /**
+   * The answer, for the flip. Optional only so a game can be built before it
+   * has one; a game that ships without it simply never offers the flip.
+   */
+  reveal?(): Revelation<TMove>;
 }
 
 export interface HintView<TMove = unknown> {
@@ -56,6 +77,10 @@ export interface HintView<TMove = unknown> {
   focus: unknown | null;
   target: unknown | null;
   chain: HintStep<TMove>[];
+  /** true once the flip is on offer — the ladder is spent and the game has an answer to show */
+  canReveal: boolean;
+  /** true once they took it */
+  revealed: boolean;
 }
 
 /**
@@ -92,18 +117,47 @@ export class HintLadder<TMove = unknown> {
     this.budget = budget;
   }
 
+  private didReveal = false;
+
   get view(): HintView<TMove> {
+    const exhausted = this.used >= this.budget;
     return {
       tier: this.tier,
       used: this.used,
       budget: this.budget,
       remaining: this.budget === Infinity ? Infinity : Math.max(0, this.budget - this.used),
-      exhausted: this.used >= this.budget,
+      exhausted,
       message: this.message,
       focus: this.focus,
       target: this.target,
       chain: this.chainSteps,
+      canReveal: exhausted && typeof this.source.reveal === 'function',
+      revealed: this.didReveal,
     };
+  }
+
+  /**
+   * Rung five: turn the board over.
+   *
+   * Offered only once the ladder is spent, and never before. A visible give-up
+   * control next to a fresh board changes what the game is asking of you; one
+   * that appears after you have genuinely run out of help is a kindness.
+   *
+   * Returns null when there is nothing to show or the budget is not yet spent.
+   * What the caller does with it is where the honesty lives: on a level the
+   * player flips back and still plays the moves, and on a daily this ends the
+   * attempt unsolved. Revealed is never solved.
+   */
+  revealAnswer(): Revelation<TMove> | null {
+    if (this.used < this.budget) return null;
+    if (typeof this.source.reveal !== 'function') return null;
+    this.didReveal = true;
+    this.tier = 0;
+    this.focus = null;
+    this.target = null;
+    this.chainSteps = [];
+    this.message = null;
+    return this.source.reveal();
   }
 
   /**

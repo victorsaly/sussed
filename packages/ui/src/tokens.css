@@ -373,3 +373,51 @@ button {
   25% { transform: translateX(-3px); }
   75% { transform: translateX(3px); }
 }
+
+/* ---- the caption stack -------------------------------------------------
+   Every game says the same four things around its board: what this chapter
+   teaches, what is left, what the hint just said, and what was copied. They
+   had drifted into three near-identical copies, one of which had lost .teach
+   altogether — so a Bridges course caption was rendering unstyled. One
+   definition, four games, and the fifth gets it for free. */
+
+.teach {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--s-ink-2);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.progress-line {
+  margin: 8px 0 0;
+  font-family: var(--s-font-mono);
+  font-size: 13px;
+  color: var(--s-ink-3);
+  text-align: center;
+}
+.progress-line.is-warn {
+  color: var(--s-accent);
+}
+
+.hint-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--s-ink-2);
+  text-align: center;
+  min-height: 1.4em;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--s-ink);
+  color: var(--s-bg);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  z-index: 40;
+}

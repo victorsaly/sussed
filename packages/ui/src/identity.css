@@ -13,6 +13,7 @@
   --s-accent-soft: color-mix(in srgb, var(--s-accent) 15%, var(--s-surface));
 }
 
+:root[data-game='arrows']      { --s-accent: #7a4b96; }
 :root[data-game='slitherlink'] { --s-accent: #33588c; }
 :root[data-game='bridges']     { --s-accent: #b4472f; }
 :root[data-game='starbattle']  { --s-accent: #8a6410; }
@@ -24,6 +25,7 @@
 :root[data-game='shadowplay']  { --s-accent: #5a51a8; }
 
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-game='arrows']      { --s-accent: #b58fd0; }
   :root:not([data-theme='light'])[data-game='slitherlink'] { --s-accent: #82aede; }
   :root:not([data-theme='light'])[data-game='bridges']     { --s-accent: #ec6a4e; }
   :root:not([data-theme='light'])[data-game='starbattle']  { --s-accent: #dfb04a; }

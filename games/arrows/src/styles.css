@@ -1,0 +1,117 @@
+/* Arrows Out. Everything shared lives in @sussed/ui/tokens.css. */
+
+/* The maze ink, in two weights. A game-specific material rather than a studio
+   token: no other game on the slate draws a body, and a warm brown against the
+   paper is what makes this read as something drawn rather than something typed.
+   Declared for all three theme states, like every colour in this codebase.
+
+   Two weights because the arrowhead decides everything and the tail decides
+   nothing, so they must not carry equal visual weight. */
+:root {
+  --s-line: #4a3b28;
+  --s-line-soft: #a08e75;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --s-line: #e0cbac;
+    --s-line-soft: #8d7a60;
+  }
+}
+:root[data-theme='dark'] {
+  --s-line: #e0cbac;
+  --s-line-soft: #8d7a60;
+}
+
+.maze {
+  width: 100%;
+  height: auto;
+  max-height: 62dvh;
+  display: block;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.grid-dot {
+  fill: var(--s-ink-3);
+  opacity: 0.16;
+}
+
+/* Drawn in a warm ink rather than the text colour — a maze is a drawn object,
+   not type, and the two should not be the same black. The tail takes the soft
+   weight so the heads are what the eye lands on. */
+.path-body {
+  fill: none;
+  stroke: var(--s-line-soft);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.path-head {
+  fill: var(--s-line);
+}
+
+/* A fat invisible copy of the same route. The visible stroke is 13 units wide;
+   a thumb needs about 70. Without this the game is unplayable on a phone and
+   feels merely fiddly on a desktop, which is the worse failure — it looks fine
+   in a screenshot. */
+.path-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+/* Rung one of the ladder: where to look. */
+.path.is-look .path-body,
+.path.is-chain .path-body {
+  stroke: var(--s-accent);
+}
+.path.is-look .path-head,
+.path.is-chain .path-head {
+  fill: var(--s-accent);
+}
+.path.is-look .path-body {
+  animation: path-pulse 1.2s ease-in-out infinite;
+}
+@keyframes path-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Rung three: the order, as numbered badges over each arrowhead. */
+.path-badge {
+  fill: var(--s-accent);
+  font-family: var(--s-font-mono);
+  font-size: 46px;
+  font-weight: 600;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--s-bg);
+  stroke-width: 6px;
+}
+
+/* A miss. The whole point is that it is visible — this is the score. */
+.path.is-miss {
+  animation: s-shake 0.18s ease-in-out 2;
+}
+.path.is-miss .path-body {
+  stroke: var(--s-accent);
+}
+.path.is-miss .path-head {
+  fill: var(--s-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path.is-miss,
+  .path.is-look .path-body {
+    animation: none;
+  }
+  /* The miss still has to read, so it changes colour rather than moving. */
+  .path.is-miss .path-body {
+    stroke: var(--s-accent);
+    opacity: 0.6;
+  }
+}

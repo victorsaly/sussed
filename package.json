@@ -16,7 +16,8 @@
     "service:dev": "pnpm --filter @sussed/players dev",
     "test": "tsx tools/levels.test.ts && tsx tools/hints.test.ts",
     "dev:twostars": "pnpm --filter @sussed/twostars dev",
-    "dev:loop": "pnpm --filter @sussed/loop dev"
+    "dev:loop": "pnpm --filter @sussed/loop dev",
+    "dev:arrows": "pnpm --filter @sussed/arrows dev"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

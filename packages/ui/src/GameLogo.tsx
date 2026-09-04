@@ -9,6 +9,7 @@
  */
 
 export type GameId =
+  | 'arrows'
   | 'slitherlink'
   | 'bridges'
   | 'starbattle'
@@ -20,6 +21,7 @@ export type GameId =
   | 'shadowplay';
 
 export const GAME_IDS: GameId[] = [
+  'arrows',
   'slitherlink',
   'bridges',
   'starbattle',
@@ -47,6 +49,23 @@ function star(cx: number, cy: number, r: number): string {
 
 /* Each mark is a 48x48 drawing. Ink strokes inherit currentColor. */
 const MARKS: Record<GameId, React.ReactNode> = {
+  // A path threading out: a body that turns a corner, and the head already
+  // past the edge of the frame. The mechanic is the mark.
+  arrows: (
+    <>
+      <path d="M10 40H10.01M10 24H10.01M26 40H26.01" stroke={RULE} strokeWidth={3} strokeLinecap="round" />
+      <path
+        d="M12 38V26H30"
+        fill="none"
+        stroke={ACCENT}
+        strokeWidth={4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M42 26L32 20V32Z" fill={ACCENT} />
+    </>
+  ),
+
   // The loop: a dot lattice with one closed circuit drawn through it.
   slitherlink: (
     <>
@@ -201,6 +220,7 @@ const MARKS: Record<GameId, React.ReactNode> = {
 };
 
 const LABELS: Record<GameId, string> = {
+  arrows: 'Arrows Out',
   slitherlink: 'Slitherlink',
   bridges: 'Bridges',
   starbattle: 'Star Battle',

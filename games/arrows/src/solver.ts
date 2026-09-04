@@ -68,7 +68,17 @@ export interface SolveReport {
  * difficulty number that changed between runs would be worthless.
  */
 export function solve(p: Puzzle): SolveReport {
-  let state: State = initialState(p);
+  return solveFrom(p, initialState(p));
+}
+
+/**
+ * The same unthreading from wherever the player has got to.
+ *
+ * This is what the flip shows: not the answer to the board they were given,
+ * but the answer to the board in front of them now.
+ */
+export function solveFrom(p: Puzzle, from: State): SolveReport {
+  let state: State = from;
   const order: number[] = [];
   const freeCurve: number[] = [];
   const liveCurve: number[] = [];

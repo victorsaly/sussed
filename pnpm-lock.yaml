@@ -26,6 +26,9 @@ importers:
       '@sussed/player':
         specifier: workspace:*
         version: link:../../packages/player
+      '@sussed/pwa':
+        specifier: workspace:*
+        version: link:../../packages/pwa
       '@sussed/share':
         specifier: workspace:*
         version: link:../../packages/share
