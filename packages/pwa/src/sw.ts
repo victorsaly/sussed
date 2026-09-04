@@ -10,8 +10,24 @@
 
 declare const self: ServiceWorkerGlobalScope;
 
+/**
+ * The base path this game is served from, substituted at build time by the
+ * plugin in `vite.ts`. It is not used for fetching — every URL below is
+ * relative — only to name the cache.
+ */
+declare const __SW_SCOPE__: string;
+
 const VERSION = 'v2';
-const SHELL = `sussed-shell-${VERSION}`;
+
+/**
+ * One cache per game, not one for the studio.
+ *
+ * While the games are staged side by side on a single host, a shared cache
+ * name means four workers with four different shells all writing to the same
+ * bucket, each evicting the last. Keying on the scope keeps them apart, and on
+ * a game's own domain it is simply '/' and means nothing.
+ */
+const SHELL = `sussed-shell-${VERSION}-${__SW_SCOPE__}`;
 
 /**
  * Relative, because the worker is not always at a domain root.

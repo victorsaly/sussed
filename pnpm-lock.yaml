@@ -205,7 +205,11 @@ importers:
         specifier: ^18.3.12
         version: 18.3.31
 
-  packages/pwa: {}
+  packages/pwa:
+    devDependencies:
+      vite:
+        specifier: ^5.4.10
+        version: 5.4.21(@types/node@22.20.1)
 
   packages/share:
     dependencies:

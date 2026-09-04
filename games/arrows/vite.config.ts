@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+// Relative, not by package name: Vite externalises workspace packages when
+// it bundles this config, and then hands node a raw .ts file it cannot load.
+import { serviceWorker } from '../../packages/pwa/src/vite';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), serviceWorker()],
   build: {
     target: 'es2022',
     // The puzzle bundle is inlined into the build rather than fetched — that is
