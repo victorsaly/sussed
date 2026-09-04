@@ -46,3 +46,16 @@ export function courseSkipped(game: string): boolean {
 export function skipCourse(game: string): void {
   write(game, 'course-skipped', '1');
 }
+
+/**
+ * Changed their mind. Going back to the course has to clear the flag as well
+ * as change the screen, or the next visit quietly overrules them again — which
+ * would make "back to the course" a button that works once and then lies.
+ */
+export function resumeCourse(game: string): void {
+  try {
+    localStorage.removeItem(key(game, 'course-skipped'));
+  } catch {
+    // Same as above: not worth interrupting anyone over.
+  }
+}

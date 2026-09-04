@@ -9,6 +9,7 @@ import {
   type HintStep,
   type HintView,
   courseSkipped,
+  resumeCourse,
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
@@ -274,6 +275,7 @@ export function App() {
 
   /** Back into the course, at the first level not yet cleared. */
   const goToCourse = useCallback(() => {
+    resumeCourse(GAME);
     const next = LEVELS.find((l) => !solvedLevels.has(l.id)) ?? LEVELS[0];
     if (next) setSitting(levelSitting(next));
   }, [solvedLevels]);
