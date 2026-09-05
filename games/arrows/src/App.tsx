@@ -392,6 +392,18 @@ export function App() {
 
   const revealedThis = hints.revealed;
 
+  /**
+   * A leaderboard needs a name on the server, and the server is not deployed
+   * yet — `canSync` is false until VITE_PLAYERS_URL is set, and `leaderboard()`
+   * returns nothing without it. Offering the button anyway would be offering
+   * something that cannot happen, so it appears only when there is a service to
+   * appear on, and it opens the same naming flow the claim prompt uses.
+   */
+  const leaderboardOffer =
+    solved && player.canSync && player.me.tier === 'anonymous'
+      ? 'Put your name to this and you will show up on the board.'
+      : null;
+
   /* What the finished board says. A cleared Arrows board is empty, so this is
      the only thing telling the player what just happened — it says what they
      did, not "well done". */
@@ -528,6 +540,11 @@ export function App() {
           <>
             {/* The panel above already says what happened, so this is only the
                 way onward. Saying it twice made the win read as boilerplate. */}
+            {leaderboardOffer && (
+              <button className="s-btn" onClick={() => setClaim(leaderboardOffer)}>
+                Leaderboard
+              </button>
+            )}
             <span className="s-spacer" />
             {sitting.mode === 'level' ? (
               <button className="s-btn s-btn-primary" onClick={advance}>

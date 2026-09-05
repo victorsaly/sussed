@@ -72,6 +72,18 @@ export class Player {
     return this.identity;
   }
 
+  /**
+   * Whether anything can reach the server at all.
+   *
+   * The UI needs this to avoid offering what it cannot do. Leaderboards and
+   * claiming an account both require the players service, and until one is
+   * deployed `leaderboard()` returns an empty list and a claim cannot complete
+   * — so a button promising either would be a button that lies.
+   */
+  get canSync(): boolean {
+    return this.syncEnabled;
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

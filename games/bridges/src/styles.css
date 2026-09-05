@@ -107,6 +107,11 @@
 }
 
 .solved-flash {
+  /* fill:none belongs here, not only on the element. An SVG rect defaults to
+     a BLACK fill, so this sweep — drawn last, over the whole board — painted
+     out the finished puzzle the moment it was solved. You won, and the board
+     went blank. */
+  fill: none;
   stroke: var(--s-accent);
   stroke-width: 3;
   stroke-dasharray: 1400;

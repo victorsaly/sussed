@@ -370,7 +370,9 @@ export function Board({
         );
       })}
 
-      {solved && <rect x={0} y={0} width={width} height={height} className="solved-flash" />}
+      {solved && (
+        <rect x={0} y={0} width={width} height={height} fill="none" className="solved-flash" />
+      )}
     </svg>
   );
 }

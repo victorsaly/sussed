@@ -330,6 +330,48 @@ export function App() {
     if (next) setSitting(levelSitting(next));
   }, [solvedLevels]);
 
+
+  const levelNumber = (sitting.levelIndex ?? 0) + 1;
+  /* What the finished board says. It names what was done rather than
+     congratulating — "Sussed it" is the studio's one bit of celebration and it
+     has to earn its place next to the numbers. */
+  const doneHeadline = sitting.mode === 'level'
+    ? levelNumber === LEVELS.length
+      ? 'Course complete'
+      : `Level ${levelNumber} cleared`
+    : hints.used === 0
+      ? 'Sussed it, unaided'
+      : 'Sussed it';
+
+  const doneDetail = [
+    formatMs(stack.current.elapsedMs),
+    `${stack.current.length} moves`,
+    hints.used > 0 ? `${hints.used} nudge${hints.used === 1 ? '' : 's'}` : 'no nudges',
+  ].join(' · ');
+
+  const doneAside = ((): string | null => {
+    if (sitting.mode === 'daily') {
+      const streak = stats?.streak.current ?? 0;
+      return streak > 1 ? `That is ${streak} days in a row.` : 'A new board tomorrow.';
+    }
+    if (levelNumber === LEVELS.length) {
+      return 'That is the course. The daily is open now — a new board every day.';
+    }
+    return `${LEVELS.length - levelNumber} to go before the daily opens.`;
+  })();
+
+  /**
+   * A leaderboard needs a name on the server, and the server is not deployed
+   * yet — `canSync` is false until VITE_PLAYERS_URL is set, and `leaderboard()`
+   * returns nothing without it. Offering the button anyway would be offering
+   * something that cannot happen, so it appears only when there is a service to
+   * appear on, and it opens the same naming flow the claim prompt uses.
+   */
+  const leaderboardOffer =
+    solved && player.canSync && player.me.tier === 'anonymous'
+      ? 'Put your name to this and you will show up on the board.'
+      : null;
+
   const onShare = async (): Promise<void> => {
     const result = await share({
       game: GAME,
@@ -461,18 +503,24 @@ export function App() {
         {caption ?? ''}
       </p>
 
+      {solved && (
+        <div className="s-done">
+          <div className="headline">{doneHeadline}</div>
+          <div className="detail">{doneDetail}</div>
+          {doneAside && <p className="aside">{doneAside}</p>}
+        </div>
+      )}
+
       <footer className="s-bar">
         {solved ? (
           <>
-            <div>
-              <div className="s-title" style={{ color: 'var(--s-accent)' }}>
-                Sussed it
-              </div>
-              <div className="s-sub">
-                {formatMs(stack.current.elapsedMs)} · {stack.current.length} moves
-                {hints.used > 0 ? ` · ${hints.used} nudge${hints.used > 1 ? 's' : ''}` : ' · unaided'}
-              </div>
-            </div>
+            {/* The panel above says what happened. Repeating it here made a win
+                read as boilerplate, so this is only the way onward. */}
+            {leaderboardOffer && (
+              <button className="s-btn" onClick={() => setClaim(leaderboardOffer)}>
+                Leaderboard
+              </button>
+            )}
             <span className="s-spacer" />
             {sitting.mode === 'level' ? (
               <button className="s-btn s-btn-primary" onClick={advance}>
