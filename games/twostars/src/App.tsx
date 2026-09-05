@@ -314,11 +314,18 @@ export function App() {
   const goToDaily = useCallback(() => {
     skipCourse(GAME);
     setSitting(dailySitting());
+    // A preference that changes the screen and says nothing looks like a
+    // one-off jump. Saying it out loud is the difference between a setting
+    // someone trusts and one they press again every visit to be sure.
+    setToast('Course skipped. The daily opens first from now on.');
+    setTimeout(() => setToast(null), 2600);
   }, []);
 
   /** Back into the course, at the first level not yet cleared. */
   const goToCourse = useCallback(() => {
     resumeCourse(GAME);
+    setToast('Back on the course.');
+    setTimeout(() => setToast(null), 2000);
     const next = LEVELS.find((l) => !solvedLevels.has(l.id)) ?? LEVELS[0];
     if (next) setSitting(levelSitting(next));
   }, [solvedLevels]);
@@ -415,7 +422,7 @@ export function App() {
           the way: the board is what you came for. */}
       {sitting.mode === 'level' ? (
         <button className="s-quiet" onClick={goToDaily}>
-          Played before? Go straight to today&rsquo;s puzzle
+          Played before? Skip the course
         </button>
       ) : solvedLevels.size < LEVELS.length ? (
         <button className="s-quiet" onClick={goToCourse}>
