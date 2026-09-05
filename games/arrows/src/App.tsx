@@ -12,7 +12,7 @@ import {
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState, hubHref } from '@sussed/ui';
+import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState, gameHref, hubHref } from '@sussed/ui';
 import { share } from '@sussed/share';
 import { initialState, isSolved, liveCount, tap, type Puzzle, type State } from './engine';
 import { createHintSource } from './hints';
@@ -22,7 +22,10 @@ import bundle from '../public/puzzles.json';
 
 const GAME = 'arrows';
 const LABEL = 'Arrows Out';
-const URL = 'https://arrowsout.com';
+/** The keyword domain this game will get. Not bought yet, so the share
+    card uses wherever the game is actually being served from. */
+const PLANNED_DOMAIN = 'https://arrowsout.com';
+void PLANNED_DOMAIN;
 
 /** How long the flip waits between taps when it plays a solve back. */
 const REPLAY_STEP_MS = 240;
@@ -360,7 +363,7 @@ export function App() {
       hints: hints.used,
       difficulty: puzzle.difficulty,
       streak: stats?.streak.current ?? 0,
-      url: URL,
+      url: gameHref(import.meta.env.BASE_URL),
     });
     setToast(result === 'copied' ? 'Copied' : result === 'failed' ? "Couldn't copy that" : null);
     setTimeout(() => setToast(null), 1600);

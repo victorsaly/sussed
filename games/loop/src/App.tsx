@@ -13,7 +13,7 @@ import {
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState, hubHref } from '@sussed/ui';
+import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState, gameHref, hubHref } from '@sussed/ui';
 import { share } from '@sussed/share';
 import {
   buildTopology,
@@ -41,7 +41,10 @@ import bundle from '../public/puzzles.json';
 
 const GAME = 'loop';
 const LABEL = 'Loop';
-const URL = 'https://loopdaily.com';
+/** The keyword domain this game will get. Not bought yet, so the share
+    card uses wherever the game is actually being served from. */
+const PLANNED_DOMAIN = 'https://loopdaily.com';
+void PLANNED_DOMAIN;
 
 interface Bundle {
   epoch: string;
@@ -331,7 +334,7 @@ export function App() {
       hints: hints.used,
       difficulty: puzzle.difficulty,
       streak: stats?.streak.current ?? 0,
-      url: URL,
+      url: gameHref(import.meta.env.BASE_URL),
     });
     setToast(result === 'copied' ? 'Copied' : result === 'failed' ? "Couldn't copy that" : null);
     setTimeout(() => setToast(null), 1600);
