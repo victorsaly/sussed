@@ -53,6 +53,10 @@ export function serviceWorker(): Plugin {
           // differ per game: while the games are staged side by side on one
           // host, a shared name means four workers evicting each other.
           __SW_SCOPE__: JSON.stringify(config.base),
+          // Changes every build, so a deploy retires the previous shell cache
+          // instead of leaving a returning player pinned to files that the new
+          // build replaced.
+          __SW_BUILD__: JSON.stringify(Date.now().toString(36)),
         },
         build: {
           outDir: resolve(config.root, config.build.outDir),

@@ -17,7 +17,18 @@ declare const self: ServiceWorkerGlobalScope;
  */
 declare const __SW_SCOPE__: string;
 
-const VERSION = 'v2';
+/**
+ * A stamp that changes on every build, substituted by the plugin.
+ *
+ * Without it the cache name never changes, `activate` finds nothing to delete,
+ * and the shell cached before a deploy survives it — so a returning player is
+ * served the previous index.html, which asks for asset filenames that were
+ * replaced by the new build. The result is a page of 404s on a site that is
+ * perfectly healthy for anyone arriving fresh.
+ */
+declare const __SW_BUILD__: string;
+
+const VERSION = `v3-${__SW_BUILD__}`;
 
 /**
  * One cache per game, not one for the studio.
@@ -58,12 +69,41 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/**
+ * Is this the document itself, rather than something it asks for?
+ *
+ * The two need opposite strategies. Built assets carry a content hash in their
+ * filename, so they can never go stale and are cached hard. The HTML that
+ * names them has a fixed URL and changes every build, so serving it from cache
+ * first is what pins a player to a version whose files are gone.
+ */
+const isDocument = (request: Request): boolean =>
+  request.mode === 'navigate' || request.destination === 'document';
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   if (event.request.method !== 'GET') return;
   // Anything going to the players service goes to the network, always.
   if (url.pathname.startsWith('/api/') || url.hostname.startsWith('api.')) return;
+
+  // The document: network first, cache only as the offline fallback. This is
+  // the whole fix for the stale-shell problem — a fresh deploy is picked up on
+  // the next load, and a plane still gets the last page that worked.
+  if (isDocument(event.request)) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            void caches.open(SHELL).then((c) => c.put(event.request, copy));
+          }
+          return res;
+        })
+        .catch(async () => (await caches.match(event.request)) ?? (await caches.match('./')) ?? Response.error()),
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((hit) => {
