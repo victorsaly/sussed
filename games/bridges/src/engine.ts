@@ -144,6 +144,28 @@ export function blockedByCrossing(topo: Topology, counts: Counts, edgeId: number
  * The single player-facing action: none -> one -> two -> ruled out -> none.
  * Returns null when the move is illegal, so the UI can shake rather than guess.
  */
+/**
+ * Take one bridge off, straight away.
+ *
+ * The tap-tap cycle — one, two, ✗, clear — is how a bridge is BUILT, and it
+ * has to stay that way because it is what the course teaches. But it makes
+ * undoing one bridge a three-tap journey through a state you did not want, and
+ * being stuck is exactly when nobody is feeling patient. Tapping the drawn
+ * bridge itself takes one off; tapping a ✗ clears it. Nothing else moves.
+ */
+export function removeEdge(state: BoardState, edgeId: number): BoardState | null {
+  if (state.marks.has(edgeId)) {
+    const marks = new Set(state.marks);
+    marks.delete(edgeId);
+    return { counts: state.counts, marks };
+  }
+  const current = state.counts[edgeId] ?? 0;
+  if (current === 0) return null;
+  const counts = state.counts.slice();
+  counts[edgeId] = current - 1;
+  return { counts, marks: state.marks };
+}
+
 export function cycleEdge(
   p: Puzzle,
   topo: Topology,

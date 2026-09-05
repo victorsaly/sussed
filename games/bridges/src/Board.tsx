@@ -4,6 +4,7 @@ import {
   blockedByCrossing,
   capacity,
   components,
+  cycleEdge,
   degrees,
   progress,
   type BoardState,
@@ -33,6 +34,7 @@ export function Board({
   state,
   onCycle,
   onSelect,
+  onRemove,
   solved,
   look,
   target,
@@ -44,6 +46,8 @@ export function Board({
   onCycle: (edgeId: number) => void;
   /** the island currently selected, for the caption under the board */
   onSelect?: (island: number | null) => void;
+  /** take one bridge off the edge that was tapped */
+  onRemove: (edgeId: number) => void;
   solved: boolean;
   /** island to pulse — the first rung of the hint ladder */
   look: number | null;
@@ -76,6 +80,23 @@ export function Board({
     }
     return m;
   }, [selected, topo]);
+
+  /**
+   * Of the islands in line with the selected one, which ones would actually
+   * accept a bridge right now.
+   *
+   * Highlighting every neighbour and then refusing half of them is a board
+   * that lies: you are shown a way through, you take it, and it shakes at you.
+   * The honest test is the move itself — if `cycleEdge` would return null, the
+   * island is drawn as out of reach rather than as an invitation.
+   */
+  const blockedTargets = useMemo(() => {
+    const out = new Set<number>();
+    for (const [island, edgeId] of reachable) {
+      if (!cycleEdge(puzzle, topo, state, edgeId)) out.add(island);
+    }
+    return out;
+  }, [reachable, puzzle, topo, state]);
 
   const lanes: Lane[] = topo.edges.map((e) => {
     const a = puzzle.islands[e.a]!;
@@ -242,6 +263,9 @@ export function Board({
           );
         }
         if (isTarget) {
+          // The hint ladder's edge, not a selection target. It stays at full
+          // strength whatever is selected: a hint is telling you a deduction,
+          // not offering you a tap.
           return (
             <line
               key={e.id}
@@ -277,7 +301,11 @@ export function Board({
             onPointerDown={(ev) => {
               ev.preventDefault();
               setSelected(null);
-              onCycle(e.id);
+              // Tapping a bridge that is already there means "take one off".
+              // Tapping empty air between two islands still means "build one".
+              const drawn = (state.counts[e.id] ?? 0) > 0 || state.marks.has(e.id);
+              if (drawn) onRemove(e.id);
+              else onCycle(e.id);
             }}
           />
         );
@@ -301,7 +329,8 @@ export function Board({
               done ? 'is-done' : '',
               over ? 'is-over' : '',
               selected === i ? 'is-selected' : '',
-              reachable.has(i) ? 'is-target' : '',
+              reachable.has(i) && !blockedTargets.has(i) ? 'is-target' : '',
+              blockedTargets.has(i) ? 'is-blocked' : '',
               stranded?.[i] ? 'is-stranded' : '',
               holding === i ? 'is-held' : '',
             ]

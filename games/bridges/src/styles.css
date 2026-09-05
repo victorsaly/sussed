@@ -122,3 +122,13 @@
     opacity: 0.35;
   }
 }
+
+/* An island in line with the selected one that cannot take a bridge right now
+   — it is full, or something crosses. Drawn as out of reach rather than as an
+   invitation: highlighting it the same as a real option and then refusing the
+   tap is the board telling you something that is not true. */
+.island.is-blocked circle {
+  stroke-dasharray: 2 4;
+  stroke: var(--s-ink-3);
+  opacity: 0.55;
+}

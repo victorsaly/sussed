@@ -15,7 +15,15 @@ import {
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
 import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState } from '@sussed/ui';
 import { share } from '@sussed/share';
-import { buildTopology, cycleEdge, isSolved, progress, type BoardState, type Puzzle } from './engine';
+import {
+  buildTopology,
+  cycleEdge,
+  isSolved,
+  progress,
+  removeEdge,
+  type BoardState,
+  type Puzzle,
+} from './engine';
 import { deductionChain, nextDeduction, type Deduction } from './solver';
 import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from './levels';
 import { Board } from './Board';
@@ -210,6 +218,29 @@ export function App() {
     [puzzle, topo, solved],
   );
 
+  /**
+   * Tapping a bridge takes one off. Separate from `cycle` on purpose: building
+   * is taught as a cycle and must stay one, but unbuilding should not make you
+   * walk the rest of the way round it.
+   */
+  const remove = useCallback(
+    (edgeId: number) => {
+      if (solved) return;
+      stack.current.start();
+      setState((current) => {
+        const next = removeEdge(current, edgeId);
+        if (!next) return current;
+        stack.current.push({ edgeId, before: current });
+        return next;
+      });
+      stuck.current.touch();
+      setChain([]);
+      ladder.current!.clear();
+      force((n) => n + 1);
+    },
+    [solved],
+  );
+
   const undo = useCallback(() => {
     const move = stack.current.undo();
     if (!move) return;
@@ -383,6 +414,7 @@ export function App() {
           topo={topo}
           state={state}
           onCycle={cycle}
+          onRemove={remove}
           onSelect={setSelected}
           solved={solved}
           look={hints.focus as number | null}
@@ -444,6 +476,8 @@ export function App() {
         <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--s-ink-2)', lineHeight: 1.7 }}>
           <li>Join the islands. Tap one, then another.</li>
           <li>Tap the same pair again for a double, once more to mark it ✗, once more to clear.</li>
+          <li>Tap a bridge you have already drawn to take one off.</li>
+          <li>An island greyed out while you have one selected cannot take a bridge yet.</li>
           <li>Each island's number is exactly how many bridges must touch it.</li>
           <li>Once you start on an island, its big number is what it still needs. The small one is its total.</li>
           <li>Hold an island to see, in grey, how many bridges it could still take each way.</li>
