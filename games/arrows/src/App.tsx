@@ -12,7 +12,7 @@ import {
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState } from '@sussed/ui';
+import { ClaimPrompt, CourseDots, GameLogo, NudgeButton, Sheet, StatsSheet, type DotState, hubHref } from '@sussed/ui';
 import { share } from '@sussed/share';
 import { initialState, isSolved, liveCount, tap, type Puzzle, type State } from './engine';
 import { createHintSource } from './hints';
@@ -425,7 +425,14 @@ export function App() {
   return (
     <div className="s-shell">
       <header className="s-bar">
-        <GameLogo game="arrows" title="" />
+        <a
+          className="s-home"
+          href={hubHref(import.meta.env.BASE_URL)}
+          aria-label="All SUSSED games"
+          title="All games"
+        >
+          <GameLogo game="arrows" title="" />
+        </a>
         <div>
           <h1 className="s-title">{sitting.mode === 'daily' ? LABEL : sitting.title}</h1>
           <div className="s-sub">
@@ -551,7 +558,8 @@ export function App() {
           <li>The tail does not matter. However long it is, it follows the head.</li>
           <li>Tap one that cannot go and nothing moves — that is a miss.</li>
           <li>Clear the board. Order never matters; finding the free one does.</li>
-        </ul>
+                  <li>Out of nudges and still stuck? &ldquo;Show me&rdquo; turns the board over.</li>
+</ul>
         <p style={{ color: 'var(--s-ink-3)', fontSize: 14, marginBottom: 0 }}>
           {courseDone
             ? 'Every board comes apart. You can never get stuck, only slower.'

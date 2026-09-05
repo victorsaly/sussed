@@ -13,7 +13,7 @@ import {
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState } from '@sussed/ui';
+import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState, hubHref } from '@sussed/ui';
 import { share } from '@sussed/share';
 import {
   buildTopology,
@@ -24,7 +24,7 @@ import {
   type BoardState,
   type Puzzle,
 } from './engine';
-import { deductionChain, nextDeduction, type Deduction } from './solver';
+import { deductionChain, nextDeduction, solve, type Deduction } from './solver';
 import { BRIDGES_LEVELS, levelPuzzle, teachingFor } from './levels';
 import { Board } from './Board';
 import bundle from '../public/puzzles.json';
@@ -119,6 +119,10 @@ export function App() {
   const [claim, setClaim] = useState<string | null>(null);
   const [claimDismissed, setClaimDismissed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /* The flip: the finished board, laid over the player's own. Their position is
+     untouched underneath — on a level they turn it back and still play it. */
+  const [shown, setShown] = useState<BoardState | null>(null);
+  const [revealNote, setRevealNote] = useState<string | null>(null);
   const [recorded, setRecorded] = useState(false);
   const [offered, setOffered] = useState(false);
   const [chain, setChain] = useState<Deduction[]>([]);
@@ -135,6 +139,8 @@ export function App() {
     setRecorded(false);
     setChain([]);
     setOffered(false);
+    setShown(null);
+    setRevealNote(null);
   }, [topo]);
 
   /* ------------------------------------------------------------- hints */
@@ -146,6 +152,9 @@ export function App() {
       },
       chain: (max) => deductionChain(puzzle, topo, state.counts, state.marks, max).map(toStep),
       describeFocus: (f) => `the ${puzzle.islands[f as number]!.n}`,
+      // Bridges has an answer you can look at, so the flip is a picture of the
+      // finished board rather than Arrows' replay of an order.
+      reveal: () => ({ kind: 'solved' as const, board: solve(puzzle, 1, topo).solution ?? null }),
     }),
     [puzzle, topo, state],
   );
@@ -241,6 +250,37 @@ export function App() {
     [solved],
   );
 
+  /**
+   * Turn the board over.
+   *
+   * Offered only once the hint ladder is spent — a give-up control next to a
+   * fresh board changes what the game is asking of you. On a level it is a
+   * look: the player's own position is untouched underneath and they turn it
+   * back and play it themselves. On a daily it ends the attempt, recorded
+   * honestly as unsolved, because revealed is never solved.
+   */
+  const flip = useCallback(() => {
+    const revelation = ladder.current!.revealAnswer();
+    if (!revelation || revelation.kind !== 'solved') return;
+    const counts = revelation.board as number[] | null;
+    if (!counts) return;
+    setShown({ counts, marks: new Set<number>() });
+    setChain([]);
+    setOffered(false);
+    stack.current.pause();
+    if (sitting.mode === 'daily') {
+      setRevealNote('Revealed. Nothing recorded today — the next one is tomorrow.');
+    }
+    force((n) => n + 1);
+  }, [sitting.mode]);
+
+  /** Back to their own board, exactly as they left it. */
+  const unflip = useCallback(() => {
+    setShown(null);
+    setRevealNote('That is the answer. Now do it yourself.');
+    stack.current.start();
+  }, []);
+
   const undo = useCallback(() => {
     const move = stack.current.undo();
     if (!move) return;
@@ -270,7 +310,8 @@ export function App() {
       await player.record({
         puzzle: sitting.puzzleId,
         mode: sitting.mode,
-        solved: true,
+        // A board finished after the flip on a daily is not a solve.
+        solved: !(hints.revealed && sitting.mode === 'daily'),
         ms,
         moves: stack.current.length,
         hints: hints.used,
@@ -350,17 +391,26 @@ export function App() {
 
   // A quiet caption for the first minute of a daily. Never a modal, never a wall.
   const caption = useMemo((): string | null => {
+    if (shown) return 'This is the answer. Turn it back when you have seen enough.';
+    if (revealNote) return revealNote;
     if (hints.message) return hints.message;
     if (solved || sitting.mode === 'level') return null;
     if (prog.placed === 0) return selected === null ? 'Tap an island to start.' : 'Now tap an island in line with it.';
     if (prog.placed <= 2) return 'Hold an island to see how many bridges it could still take.';
     return null;
-  }, [hints.message, solved, sitting.mode, prog.placed, selected]);
+  }, [shown, revealNote, hints.message, solved, sitting.mode, prog.placed, selected]);
 
   return (
     <div className="s-shell">
       <header className="s-bar">
-        <GameLogo game="bridges" title="" />
+        <a
+          className="s-home"
+          href={hubHref(import.meta.env.BASE_URL)}
+          aria-label="All SUSSED games"
+          title="All games"
+        >
+          <GameLogo game="bridges" title="" />
+        </a>
         <div>
           <h1 className="s-title">{sitting.mode === 'daily' ? 'Bridges' : sitting.title}</h1>
           <div className="s-sub">
@@ -412,7 +462,7 @@ export function App() {
         <Board
           puzzle={puzzle}
           topo={topo}
-          state={state}
+          state={shown ?? state}
           onCycle={cycle}
           onRemove={remove}
           onSelect={setSelected}
@@ -462,6 +512,18 @@ export function App() {
               Undo
             </button>
             <NudgeButton hints={hints} offered={offered} onPress={nudge} />
+            {/* Rung five. It appears only once the ladder is spent. */}
+            {shown ? (
+              <button className="s-btn" onClick={unflip}>
+                Hide
+              </button>
+            ) : (
+              hints.canReveal && (
+                <button className="s-btn" onClick={flip}>
+                  Show me
+                </button>
+              )
+            )}
             <span className="s-spacer" />
             <div className="s-sub">{formatMs(stack.current.elapsedMs)}</div>
           </>
@@ -483,7 +545,8 @@ export function App() {
           <li>Hold an island to see, in grey, how many bridges it could still take each way.</li>
           <li>Bridges run straight, and never cross.</li>
           <li>Everything must end up in one connected network.</li>
-        </ul>
+                  <li>Out of nudges and still stuck? &ldquo;Show me&rdquo; turns the board over.</li>
+</ul>
         <p style={{ color: 'var(--s-ink-3)', fontSize: 14, marginBottom: 0 }}>
           {courseDone
             ? 'Monday and Tuesday puzzles never need a guess — they can always be worked out.'

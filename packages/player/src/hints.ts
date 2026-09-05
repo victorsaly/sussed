@@ -121,6 +121,12 @@ export class HintLadder<TMove = unknown> {
 
   get view(): HintView<TMove> {
     const exhausted = this.used >= this.budget;
+    /* The flip is offered once help has run out — or where help never runs
+       out at all. On the first course levels the budget is deliberately
+       Infinity, because a hint there IS the teaching; with `exhausted` alone
+       those are the only boards in the game where a stuck player could never
+       turn it over, which is exactly backwards. */
+    const spent = exhausted || this.budget === Infinity;
     return {
       tier: this.tier,
       used: this.used,
@@ -131,7 +137,7 @@ export class HintLadder<TMove = unknown> {
       focus: this.focus,
       target: this.target,
       chain: this.chainSteps,
-      canReveal: exhausted && typeof this.source.reveal === 'function',
+      canReveal: spent && typeof this.source.reveal === 'function',
       revealed: this.didReveal,
     };
   }
@@ -149,7 +155,7 @@ export class HintLadder<TMove = unknown> {
    * attempt unsolved. Revealed is never solved.
    */
   revealAnswer(): Revelation<TMove> | null {
-    if (this.used < this.budget) return null;
+    if (this.used < this.budget && this.budget !== Infinity) return null;
     if (typeof this.source.reveal !== 'function') return null;
     this.didReveal = true;
     this.tier = 0;

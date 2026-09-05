@@ -6,3 +6,4 @@ export { HintChain, type ChainArrow } from './HintChain';
 export { NudgeButton } from './NudgeButton';
 export { GameLogo, GAME_IDS, type GameId } from './GameLogo';
 export { CourseDots, type DotState } from './CourseDots';
+export { hubHref, STUDIO_URL } from './hub';

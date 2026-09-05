@@ -13,10 +13,28 @@ import {
   skipCourse,
 } from '@sussed/player';
 import { usePlayer, usePlayerStats, useSyncOnFocus } from '@sussed/player/react';
-import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState } from '@sussed/ui';
+import { ClaimPrompt, GameLogo, NudgeButton, Sheet, StatsSheet, CourseDots, type DotState, hubHref } from '@sussed/ui';
 import { share } from '@sussed/share';
-import { buildUnits, cycleCell, DOT, emptyCells, isSolved, progress, STAR, type Mark, type Puzzle } from './engine';
-import { deductionChain, describeFocus, nextDeduction, type Deduction, type HintFocus } from './solver';
+import {
+  buildUnits,
+  cycleCell,
+  DOT,
+  emptyCells,
+  isSolved,
+  progress,
+  STAR,
+  type Cells,
+  type Mark,
+  type Puzzle,
+} from './engine';
+import {
+  deductionChain,
+  describeFocus,
+  nextDeduction,
+  solve,
+  type Deduction,
+  type HintFocus,
+} from './solver';
 import { TWOSTARS_LEVELS, levelPuzzle, teachingFor } from './levels';
 import { Board } from './Board';
 import bundle from '../public/puzzles.json';
@@ -101,6 +119,10 @@ export function App() {
   const [claim, setClaim] = useState<string | null>(null);
   const [claimDismissed, setClaimDismissed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /* The flip: the finished board laid over the player's own. Their position
+     is untouched underneath — on a level they turn it back and play it. */
+  const [shown, setShown] = useState<Cells | null>(null);
+  const [revealNote, setRevealNote] = useState<string | null>(null);
   const [recorded, setRecorded] = useState(false);
   const [offered, setOffered] = useState(false);
   const [chain, setChain] = useState<Deduction[]>([]);
@@ -116,6 +138,8 @@ export function App() {
     setRecorded(false);
     setChain([]);
     setOffered(false);
+    setShown(null);
+    setRevealNote(null);
   }, [puzzle, units]);
 
   /* ------------------------------------------------------------- hints */
@@ -127,6 +151,9 @@ export function App() {
       },
       chain: (max) => deductionChain(puzzle, units, cells, max).map(toStep),
       describeFocus: (f) => describeFocus(f as HintFocus),
+      // A deduction board has an answer you can look at, so the flip is
+      // the finished grid rather than Arrows' replay of an order.
+      reveal: () => ({ kind: 'solved' as const, board: solve(puzzle, 1, units).solution ?? null }),
     }),
     [puzzle, units, cells],
   );
@@ -189,6 +216,35 @@ export function App() {
     [solved],
   );
 
+  /**
+   * Turn the board over. Offered only once the hint ladder is spent — a
+   * give-up control next to a fresh board changes what the game is asking of
+   * you. On a level it is a look, and their own position is untouched
+   * underneath. On a daily it ends the attempt, recorded honestly as unsolved,
+   * because revealed is never solved.
+   */
+  const flip = useCallback(() => {
+    const revelation = ladder.current!.revealAnswer();
+    if (!revelation || revelation.kind !== 'solved') return;
+    const answer = revelation.board as Cells | null;
+    if (!answer) return;
+    setShown(answer);
+    setChain([]);
+    setOffered(false);
+    stack.current.pause();
+    if (sitting.mode === 'daily') {
+      setRevealNote('Revealed. Nothing recorded today — the next one is tomorrow.');
+    }
+    force((n) => n + 1);
+  }, [sitting.mode]);
+
+  /** Back to their own board, exactly as they left it. */
+  const unflip = useCallback(() => {
+    setShown(null);
+    setRevealNote('That is the answer. Now do it yourself.');
+    stack.current.start();
+  }, []);
+
   const undo = useCallback(() => {
     const move = stack.current.undo();
     if (!move) return;
@@ -222,7 +278,8 @@ export function App() {
       await player.record({
         puzzle: sitting.puzzleId,
         mode: sitting.mode,
-        solved: true,
+        // A board finished after the flip on a daily is not a solve.
+        solved: !(hints.revealed && sitting.mode === 'daily'),
         ms,
         moves: stack.current.length,
         hints: hints.used,
@@ -297,17 +354,26 @@ export function App() {
 
   // A quiet caption for the first minute of a daily. Never a modal, never a wall.
   const caption = useMemo((): string | null => {
+    if (shown) return 'This is the answer. Turn it back when you have seen enough.';
+    if (revealNote) return revealNote;
     if (hints.message) return hints.message;
     if (solved || sitting.mode === 'level') return null;
     if (prog.placed === 0) return 'Tap a cell to place a star. Tap again for a dot, once more to clear.';
     if (prog.placed === 1) return 'The faint dots are cells that can no longer hold a star.';
     return null;
-  }, [hints.message, solved, sitting.mode, prog.placed]);
+  }, [shown, revealNote, hints.message, solved, sitting.mode, prog.placed]);
 
   return (
     <div className="s-shell">
       <header className="s-bar">
-        <GameLogo game="starbattle" title="" />
+        <a
+          className="s-home"
+          href={hubHref(import.meta.env.BASE_URL)}
+          aria-label="All SUSSED games"
+          title="All games"
+        >
+          <GameLogo game="starbattle" title="" />
+        </a>
         <div>
           <h1 className="s-title">{sitting.mode === 'daily' ? LABEL : sitting.title}</h1>
           <div className="s-sub">
@@ -359,7 +425,7 @@ export function App() {
         <Board
           puzzle={puzzle}
           units={units}
-          cells={cells}
+          cells={shown ?? cells}
           onCycle={cycle}
           solved={solved}
           look={(hints.focus as HintFocus | null) ?? null}
@@ -407,6 +473,18 @@ export function App() {
               Undo
             </button>
             <NudgeButton hints={hints} offered={offered} onPress={nudge} />
+            {/* Rung five. It appears only once the ladder is spent. */}
+            {shown ? (
+              <button className="s-btn" onClick={unflip}>
+                Hide
+              </button>
+            ) : (
+              hints.canReveal && (
+                <button className="s-btn" onClick={flip}>
+                  Show me
+                </button>
+              )
+            )}
             <span className="s-spacer" />
             <div className="s-sub">{formatMs(stack.current.elapsedMs)}</div>
           </>
@@ -424,7 +502,8 @@ export function App() {
           <li>Tap a cell for a star. Tap again for a dot meaning "not here", once more to clear.</li>
           <li>Faint dots appear on their own in cells that can no longer hold a star.</li>
           <li>A region turns green once it has its stars.</li>
-        </ul>
+                  <li>Out of nudges and still stuck? &ldquo;Show me&rdquo; turns the board over.</li>
+</ul>
         <p style={{ color: 'var(--s-ink-3)', fontSize: 14, marginBottom: 0 }}>
           {courseDone
             ? 'Monday and Tuesday puzzles never need a guess — they can always be worked out.'
