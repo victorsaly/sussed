@@ -8,6 +8,7 @@ import {
   type HintSource,
   type HintStep,
   type HintView,
+  type LeaderboardEntry,
   courseSkipped,
   resumeCourse,
   skipCourse,
@@ -118,6 +119,7 @@ export function App() {
   const stuck = useRef(new StuckWatcher());
   const [, force] = useState(0);
   const [showStats, setShowStats] = useState(false);
+  const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [claim, setClaim] = useState<string | null>(null);
   const [claimDismissed, setClaimDismissed] = useState(false);
@@ -404,6 +406,26 @@ export function App() {
       ? 'Put your name to this and you will show up on the board.'
       : null;
 
+  // Today's board, fetched only when the sheet is actually opened — it is one
+  // layer down, and nobody who never opens it should pay for a request.
+  useEffect(() => {
+    if (!showStats || !player.canSync) return;
+    let alive = true;
+    void player.leaderboard().then((entries) => {
+      if (alive) setBoard(entries);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [showStats, player]);
+
+  /** Why there is no board, in words, rather than an empty heading. */
+  const boardNote = !player.canSync
+    ? 'Boards need an account to put a name to a time, and that is not switched on yet.'
+    : player.me.tier === 'anonymous'
+      ? 'Claim your history to put a name to your times and appear here.'
+      : null;
+
   const onShare = async (): Promise<void> => {
     const result = await share({
       game: GAME,
@@ -473,14 +495,19 @@ export function App() {
         </div>
         <span className="s-spacer" />
         {stats && stats.streak.current > 0 && (
-          <div className="s-sub" title="Current streak">
+          <button
+            className="s-streak"
+            onClick={() => setShowStats(true)}
+            title={`${stats.streak.current}-day streak — see your record and today's board`}
+            aria-label={`${stats.streak.current} day streak. See your record and today's board.`}
+          >
             {stats.streak.current}🔥
-          </div>
+          </button>
         )}
-        <button className="s-icon" onClick={() => setShowRules(true)} aria-label="How it works">
+        <button className="s-icon" onClick={() => setShowRules(true)} title="How it works" aria-label="How it works">
           ?
         </button>
-        <button className="s-icon" onClick={() => setShowStats(true)} aria-label="Your record">
+        <button className="s-icon" onClick={() => setShowStats(true)} title="Your record and today&rsquo;s board" aria-label="Your record and today's board">
           ▤
         </button>
       </header>
@@ -590,7 +617,13 @@ export function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
-      <StatsSheet open={showStats} onClose={() => setShowStats(false)} stats={stats} />
+      <StatsSheet
+        open={showStats}
+        onClose={() => setShowStats(false)}
+        stats={stats}
+        board={board}
+        boardNote={boardNote}
+      />
 
       <Sheet open={showRules} onClose={() => setShowRules(false)} title="How it works">
         <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--s-ink-2)', lineHeight: 1.7 }}>

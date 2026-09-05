@@ -1,4 +1,4 @@
-import { formatMs, type GameStats } from '@sussed/player';
+import { formatMs, type GameStats, type LeaderboardEntry } from '@sussed/player';
 import { Sheet } from './Sheet';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -7,10 +7,16 @@ export function StatsSheet({
   open,
   onClose,
   stats,
+  board,
+  boardNote,
 }: {
   open: boolean;
   onClose: () => void;
   stats: GameStats | null;
+  /** today's leaderboard, when there is a service to fetch one from */
+  board?: LeaderboardEntry[];
+  /** why there is no board, said plainly rather than left blank */
+  boardNote?: string | null;
 }) {
   if (!stats) return null;
   const peak = Math.max(1, ...stats.byWeekday);
@@ -51,6 +57,27 @@ export function StatsSheet({
         <dt className="s-sub">Average</dt>
         <dd style={{ margin: 0 }}>{stats.averageMs === null ? '—' : formatMs(stats.averageMs)}</dd>
       </dl>
+
+      {/* Today's board. It is either here or it says why not — a heading over
+          an empty space tells nobody anything. */}
+      <div className="s-sub" style={{ margin: '24px 0 8px' }}>
+        Today&rsquo;s board
+      </div>
+      {board && board.length > 0 ? (
+        <ol className="s-board">
+          {board.map((e) => (
+            <li key={`${e.rank}-${e.displayName}`} className={e.isYou ? 'is-you' : undefined}>
+              <span className="rank">{e.rank}</span>
+              <span className="who">{e.displayName}</span>
+              <span className="time">{formatMs(e.ms)}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="s-sub" style={{ margin: 0 }}>
+          {boardNote ?? 'Nobody has finished today&rsquo;s puzzle yet.'}
+        </p>
+      )}
     </Sheet>
   );
 }

@@ -564,3 +564,70 @@ button {
     transition: none;
   }
 }
+
+/* ---- today's board -----------------------------------------------------
+   A leaderboard is a list of names and times, and it should look like one:
+   no cards, no medals. Your own row is the only one that stands out, because
+   it is the only one you are looking for. */
+
+.s-board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.s-board li {
+  display: grid;
+  grid-template-columns: 2.2em 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 8px;
+  border-radius: 2px;
+}
+.s-board li.is-you {
+  background: var(--s-accent-soft);
+  color: var(--s-accent);
+  font-weight: 600;
+}
+.s-board .rank {
+  font-family: var(--s-font-mono);
+  font-size: 12px;
+  color: var(--s-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.s-board li.is-you .rank {
+  color: var(--s-accent);
+}
+.s-board .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-board .time {
+  font-family: var(--s-font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The streak, which is also the way to your record and today's board. It was
+   a number you could not press; every other thing in that row does something. */
+.s-streak {
+  font-family: var(--s-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--s-ink-3);
+  background: none;
+  border: 0;
+  padding: 6px 4px;
+  min-height: 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.s-streak:hover {
+  color: var(--s-ink);
+}
+.s-streak:focus-visible {
+  outline: 2px solid var(--s-accent);
+  outline-offset: 1px;
+}
